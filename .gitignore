@@ -1,0 +1,21 @@
+.venv/
+.idea/
+__pycache__/
+*.pyc
+.env
+.env.*
+!.env.example
+logs/
+SmartVoyage/logs/
+# 旧课程配置可能含凭证，不应直接发布。
+SmartVoyage/config.py
+agent_learn/config.py
+ResolveDesk/var/
+.release-env/
+.uv-cache/
+release/
+SmartVoyage/var/
+.streamlit/secrets.toml
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal

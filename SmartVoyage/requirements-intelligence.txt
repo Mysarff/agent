@@ -1,0 +1,10 @@
+# 新入口及其验证所需直接依赖；原 A2A/MCP/MySQL 服务继续使用原 requirements.txt。
+pydantic==2.11.7
+langchain-openai==0.3.28
+python-a2a==0.5.4
+streamlit==1.47.1
+httpx==0.28.1
+mcp==1.18.0
+fastapi==0.116.1
+uvicorn==0.35.0
+jsonschema==4.26.0

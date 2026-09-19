@@ -1,0 +1,14 @@
+**
+!requirements.txt
+!SmartVoyage/
+!SmartVoyage/__init__.py
+!SmartVoyage/app.py
+!SmartVoyage/main.py
+!SmartVoyage/requirements-intelligence.txt
+!SmartVoyage/intelligence/
+!SmartVoyage/intelligence/*.py
+!SmartVoyage/intelligence/*.json
+!SmartVoyage/services/
+!SmartVoyage/services/*.py
+!SmartVoyage/knowledge/
+!SmartVoyage/knowledge/*.json

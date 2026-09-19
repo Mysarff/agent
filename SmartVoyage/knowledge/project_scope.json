@@ -1,0 +1,8 @@
+{
+  "id": "project-scope",
+  "title": "项目数据来源与模拟预订范围",
+  "source": "SmartVoyage/services/data.py; SmartVoyage/services/mcp_tools.py",
+  "version": "2026-09-19",
+  "kind": "project_documentation",
+  "text": "本项目票务数据来自本地样例数据库，不代表实时票价、真实余票或真实演出安排。网络演示使用自建样例库，原课程MySQL样例数据未迁移或修改。\n\n新版网络服务通过真实A2A与MCP调用查询数据库，确认后保存本地模拟订单并扣减样例库存；没有接入真实出票和支付。旧离线模式只返回演示文本。待确认令牌仅当前会话有效；已保存的模拟订单可在数据库保留。\n\n默认天气为固定样例，可配置Open-Meteo获取预报，返回内容会注明来源。知识库没有正式退改签政策，不能据此推导退票费或赔偿金额。"
+}

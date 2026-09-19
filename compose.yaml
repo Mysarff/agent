@@ -1,0 +1,18 @@
+services:
+  travel:
+    build: .
+    init: true
+    ports:
+      - "127.0.0.1:8501:8501"
+    environment:
+      SMARTVOYAGE_ACCESS_PASSWORD: ${SMARTVOYAGE_ACCESS_PASSWORD:?Set a private access password in .env}
+      SMARTVOYAGE_MODEL_MODE: ${SMARTVOYAGE_MODEL_MODE:-rules}
+      SMARTVOYAGE_API_KEY: ${SMARTVOYAGE_API_KEY:-}
+      SMARTVOYAGE_MODEL: ${SMARTVOYAGE_MODEL:-}
+      SMARTVOYAGE_BASE_URL: ${SMARTVOYAGE_BASE_URL:-}
+      SMARTVOYAGE_WEATHER_PROVIDER: ${SMARTVOYAGE_WEATHER_PROVIDER:-sample}
+    volumes:
+      - travel-data:/app/SmartVoyage/var
+    restart: unless-stopped
+volumes:
+  travel-data:

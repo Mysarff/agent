@@ -1,0 +1,7 @@
+[
+  {"id":"weather","description":"查询指定城市日期的天气、温度和降水；数据来自原天气服务，不是知识文档。","examples":["北京明天天气如何","上海下雨吗"],"handler":"a2a","endpoint":"http://127.0.0.1:5005","data_notice":"天气来自现有数据库服务，时效以数据更新时间为准。"},
+  {"id":"tickets","description":"查询火车高铁、飞机航班、演唱会门票的日期、地点、车次、票价和余票。","examples":["北京到上海的火车票","上海某场演出有哪些门票","查询飞机票"],"handler":"a2a","endpoint":"http://127.0.0.1:5006","data_notice":"票务来自项目样例库，不代表实时票价、余票或真实演出安排。"},
+  {"id":"knowledge","description":"检索项目使用说明、数据来源、查询需提供的信息、功能边界、模拟预订含义，以及演出出行比较方法。没有真实退改签政策。","examples":["项目票务数据是真的吗","查询火车票要提供什么","演出出行比较要考虑什么","支持真实订票吗"],"handler":"knowledge"},
+  {"id":"attractions","description":"生成目的地景点与旅行灵感建议，不保证营业时间、价格、实时状态和政策。","examples":["推荐北京的景点","上海有哪些游玩思路"],"handler":"generation","data_notice":"以下是模型生成的旅行灵感，实时信息需要另行核实。"},
+  {"id":"order","description":"用户明确要求预订火车票、飞机票或演唱会票时，调用原模拟预订服务。必须人工确认，不产生真实出票。","examples":["帮我预订这班火车","订一张演出票"],"handler":"a2a","endpoint":"http://127.0.0.1:5007","requires_confirmation":true,"data_notice":"这是原项目的模拟预订工具，尚未接入真实出票、支付或订单持久化。"}
+]

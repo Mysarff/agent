@@ -1,0 +1,206 @@
+{
+  "scope": "Real local protocols with rule model and sample data",
+  "run": {
+    "run_id": "033a5531-98b3-4ed4-a219-cf0c974ed057",
+    "plan": {
+      "action": "execute",
+      "message": "",
+      "steps": [
+        {
+          "id": "weather",
+          "capability": "weather",
+          "query": "查询北京2026-10-01的天气和北京到上海2026-10-01的火车票，帮我模拟预订1张",
+          "depends_on": []
+        },
+        {
+          "id": "tickets",
+          "capability": "tickets",
+          "query": "查询北京2026-10-01的天气和北京到上海2026-10-01的火车票，帮我模拟预订1张",
+          "depends_on": []
+        },
+        {
+          "id": "order",
+          "capability": "order",
+          "query": "查询北京2026-10-01的天气和北京到上海2026-10-01的火车票，帮我模拟预订1张",
+          "depends_on": [
+            "tickets"
+          ]
+        }
+      ]
+    },
+    "results": [
+      {
+        "step_id": "weather",
+        "capability": "weather",
+        "status": "success",
+        "text": "真实 A2A/MCP 调用；请查看返回的数据来源。样例票务与模拟订单不代表真实出票。\n\n{\"status\": \"success\", \"city\": \"北京\", \"date\": \"2026-10-01\", \"temperature_max\": 24, \"temperature_min\": 16, \"source\": \"固定演示天气，不是真实预报\"}",
+        "sources": [],
+        "elapsed_ms": 158.56,
+        "error_code": null,
+        "trace": [
+          {
+            "protocol": "A2A",
+            "action": "tasks/send",
+            "capability": "weather",
+            "endpoint": "http://127.0.0.1:57884",
+            "task_id": "task-9ebc84b2-36fe-415d-b83f-50c35ae62537",
+            "dependencies": []
+          },
+          {
+            "protocol": "MCP",
+            "action": "initialize/list_tools",
+            "agent": "WeatherAgent",
+            "available_tools": [
+              "query_weather"
+            ],
+            "model_mode": "rules"
+          },
+          {
+            "protocol": "MCP",
+            "action": "call_tool",
+            "tool": "query_weather",
+            "arguments": {
+              "city": "北京",
+              "travel_date": "2026-10-01"
+            },
+            "result_status": "success"
+          }
+        ]
+      },
+      {
+        "step_id": "tickets",
+        "capability": "tickets",
+        "status": "success",
+        "text": "真实 A2A/MCP 调用；请查看返回的数据来源。样例票务与模拟订单不代表真实出票。\n\n{\"status\": \"success\", \"source\": \"自建演示 SQLite 票务库，不是实时票务\", \"data\": [{\"id\": \"DEMO-TRAIN-001\", \"kind\": \"train\", \"departure_city\": \"北京\", \"arrival_city\": \"上海\", \"travel_date\": \"2026-10-01\", \"service\": \"DEMO-G101\", \"seat\": \"二等座\", \"price\": 500.0, \"remaining\": 20}]}",
+        "sources": [],
+        "elapsed_ms": 144.15,
+        "error_code": null,
+        "trace": [
+          {
+            "protocol": "A2A",
+            "action": "tasks/send",
+            "capability": "tickets",
+            "endpoint": "http://127.0.0.1:57885",
+            "task_id": "task-a6067082-aac2-4447-89be-70815c80ac44",
+            "dependencies": []
+          },
+          {
+            "protocol": "MCP",
+            "action": "initialize/list_tools",
+            "agent": "TicketAgent",
+            "available_tools": [
+              "query_tickets"
+            ],
+            "model_mode": "rules"
+          },
+          {
+            "protocol": "MCP",
+            "action": "call_tool",
+            "tool": "query_tickets",
+            "arguments": {
+              "kind": "train",
+              "departure_city": "北京",
+              "arrival_city": "上海",
+              "travel_date": "2026-10-01"
+            },
+            "result_status": "success"
+          }
+        ]
+      },
+      {
+        "step_id": "order",
+        "capability": "order",
+        "status": "awaiting_confirmation",
+        "text": "待确认的模拟操作：查询北京2026-10-01的天气和北京到上海2026-10-01的火车票，帮我模拟预订1张\n此操作不产生真实出票。",
+        "sources": [],
+        "elapsed_ms": 0,
+        "error_code": null,
+        "trace": []
+      }
+    ],
+    "message": "",
+    "pending_token": "dda92497-6471-4df3-ba1d-3d5af5b669ac",
+    "routing_trace": {
+      "preferred": [
+        "tickets",
+        "order",
+        "weather",
+        "knowledge"
+      ],
+      "attempts": 1,
+      "selected": [
+        "weather",
+        "tickets",
+        "order"
+      ],
+      "services": [
+        {
+          "capability": "weather",
+          "status": "available",
+          "agent": "WeatherAgent",
+          "endpoint": "http://127.0.0.1:57884"
+        },
+        {
+          "capability": "tickets",
+          "status": "available",
+          "agent": "TicketAgent",
+          "endpoint": "http://127.0.0.1:57885"
+        },
+        {
+          "capability": "knowledge",
+          "status": "local"
+        },
+        {
+          "capability": "attractions",
+          "status": "local"
+        },
+        {
+          "capability": "order",
+          "status": "available",
+          "agent": "OrderAgent",
+          "endpoint": "http://127.0.0.1:57886"
+        }
+      ]
+    }
+  },
+  "confirmed": {
+    "step_id": "order",
+    "capability": "order",
+    "status": "success",
+    "text": "真实 A2A/MCP 调用；请查看返回的数据来源。样例票务与模拟订单不代表真实出票。\n\n{\"status\": \"success\", \"order_id\": \"SIM-72E509EBA17D\", \"ticket_id\": \"DEMO-TRAIN-001\", \"quantity\": 1, \"amount\": 500.0, \"source\": \"本地模拟订单，无支付、无真实出票\", \"replayed\": false}",
+    "sources": [],
+    "elapsed_ms": 133.21,
+    "error_code": null,
+    "trace": [
+      {
+        "protocol": "A2A",
+        "action": "tasks/send",
+        "capability": "order",
+        "endpoint": "http://127.0.0.1:57886",
+        "task_id": "task-a7bce4dc-a298-4ffa-9559-700c812cdb88",
+        "dependencies": [
+          "tickets"
+        ]
+      },
+      {
+        "protocol": "MCP",
+        "action": "initialize/list_tools",
+        "agent": "OrderAgent",
+        "available_tools": [
+          "book_simulated_ticket"
+        ],
+        "model_mode": "rules"
+      },
+      {
+        "protocol": "MCP",
+        "action": "call_tool",
+        "tool": "book_simulated_ticket",
+        "arguments": {
+          "ticket_id": "DEMO-TRAIN-001",
+          "quantity": 1
+        },
+        "result_status": "success"
+      }
+    ]
+  }
+}
