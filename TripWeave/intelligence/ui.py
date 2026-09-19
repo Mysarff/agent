@@ -4,8 +4,8 @@ import hmac
 
 import streamlit as st
 
-from SmartVoyage.intelligence.demo import EXAMPLES
-from SmartVoyage.intelligence.runtime import build_engine
+from TripWeave.intelligence.demo import EXAMPLES
+from TripWeave.intelligence.runtime import build_engine
 
 
 def clear_current():
@@ -33,10 +33,10 @@ def cancel_pending():
     st.session_state.messages.append({"role": "assistant", "content": "已取消模拟操作。"})
 
 
-st.set_page_config(page_title="SmartVoyage · 有据旅行助手", page_icon="🧭", layout="wide")
-access_password = os.getenv('SMARTVOYAGE_ACCESS_PASSWORD')
+st.set_page_config(page_title="行知 TripWeave · 多 Agent 旅行助手", page_icon="🧭", layout="wide")
+access_password = os.getenv('TRIPWEAVE_ACCESS_PASSWORD')
 if access_password and not st.session_state.get('access_granted'):
-    st.title('SmartVoyage · 私有演示')
+    st.title('行知 TripWeave · 私有演示')
     with st.form('access'):
         supplied = st.text_input('访问口令', type='password')
         if st.form_submit_button('进入'):
@@ -46,21 +46,21 @@ if access_password and not st.session_state.get('access_granted'):
             else:
                 st.error('口令不正确')
     st.stop()
-st.title("🧭 SmartVoyage · 有据旅行助手")
+st.title("🧭 行知 TripWeave · 多 Agent 旅行助手")
 st.caption("查询天气与票务、阅读项目资料，并查看每一步的来源和执行结果。")
 choices = ["离线演示", "真实协议演示（规则模型）", "LLM 多 Agent 协作"]
-default_mode = 2 if os.getenv('SMARTVOYAGE_MODEL_MODE') == 'llm' else 1 if os.getenv('SMARTVOYAGE_STACK') == '1' else 0
+default_mode = 2 if os.getenv('TRIPWEAVE_MODEL_MODE') == 'llm' else 1 if os.getenv('TRIPWEAVE_STACK') == '1' else 0
 requested_mode = st.sidebar.selectbox("运行方式", choices, index=default_mode, key='requested_mode')
 mode = requested_mode
-model_configured = bool(os.getenv('SMARTVOYAGE_API_KEY') and os.getenv('SMARTVOYAGE_MODEL'))
-llm_ready = model_configured and os.getenv('SMARTVOYAGE_MODEL_MODE') == 'llm'
+model_configured = bool(os.getenv('TRIPWEAVE_API_KEY') and os.getenv('TRIPWEAVE_MODEL'))
+llm_ready = model_configured and os.getenv('TRIPWEAVE_MODEL_MODE') == 'llm'
 if requested_mode == choices[2] and not llm_ready:
-    mode = choices[1] if os.getenv('SMARTVOYAGE_STACK') == '1' else choices[0]
+    mode = choices[1] if os.getenv('TRIPWEAVE_STACK') == '1' else choices[0]
     st.warning('大模型尚未就绪，下面暂用示例模式运行，未调用 LLM。你可以先点击示例体验完整流程。')
     with st.expander('如何启用大模型自由问答', expanded=True):
         st.write('在项目根目录把 .env.example 复制为 .env，填写自己的模型名称与密钥，然后重启服务。不要把密钥发到聊天或上传 GitHub。')
-        st.code('SMARTVOYAGE_API_KEY=填写你自己的密钥\nSMARTVOYAGE_MODEL=填写服务商的模型名称\nSMARTVOYAGE_BASE_URL=填写服务商的兼容接口地址', language='text')
-        st.code('python -m SmartVoyage.services.stack --live', language='bash')
+        st.code('TRIPWEAVE_API_KEY=填写你自己的密钥\nTRIPWEAVE_MODEL=填写服务商的模型名称\nTRIPWEAVE_BASE_URL=填写服务商的兼容接口地址', language='text')
+        st.code('python -m TripWeave.services.stack --live', language='bash')
         st.caption('BASE_URL 使用默认服务地址时可留空。重启后，协调器和领域 Agent 才会一起使用大模型。')
     st.sidebar.caption('实际运行：' + mode)
 if st.session_state.get("engine_mode") != mode:
@@ -136,4 +136,4 @@ with st.sidebar.expander("可用能力（注册配置，不代表服务在线）
     for capability in engine.registry.items.values():
         st.write(f"**{capability.id}**：{capability.description}")
 st.sidebar.button("清空当前会话", on_click=clear_current)
-st.sidebar.caption("基于 SmartVoyage 课程项目二次开发。")
+st.sidebar.caption("基于课程旅行助手二次开发；改动对照见 README。")

@@ -16,9 +16,9 @@ import httpx
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 
-from SmartVoyage.intelligence.runtime import build_engine
-from SmartVoyage.services.data import TravelStore
-from SmartVoyage.services.domain_agent import DomainAgent
+from TripWeave.intelligence.runtime import build_engine
+from TripWeave.services.data import TravelStore
+from TripWeave.services.domain_agent import DomainAgent
 
 
 def free_port():
@@ -37,13 +37,13 @@ class NetworkTests(unittest.TestCase):
             port = free_port()
             if port not in ports:
                 ports.append(port)
-        cls.env = {'SMARTVOYAGE_MODEL_MODE': 'rules', 'SMARTVOYAGE_DB': str(cls.path),
-                   'SMARTVOYAGE_WEATHER_PROVIDER': 'sample', 'SMARTVOYAGE_MCP_URL': f'http://127.0.0.1:{ports[0]}/mcp'}
+        cls.env = {'TRIPWEAVE_MODEL_MODE': 'rules', 'TRIPWEAVE_DB': str(cls.path),
+                   'TRIPWEAVE_WEATHER_PROVIDER': 'sample', 'TRIPWEAVE_MCP_URL': f'http://127.0.0.1:{ports[0]}/mcp'}
         for kind, port in zip(('weather', 'tickets', 'order'), ports[1:]):
-            cls.env[f'SMARTVOYAGE_{kind.upper()}_URL'] = f'http://127.0.0.1:{port}'
+            cls.env[f'TRIPWEAVE_{kind.upper()}_URL'] = f'http://127.0.0.1:{port}'
         cls.children, cls.logs = [], []
-        commands = [['-m', 'SmartVoyage.services.mcp_tools', '--port', str(ports[0])]]
-        commands += [['-m', 'SmartVoyage.services.domain_agent', '--kind', kind, '--port', str(port)]
+        commands = [['-m', 'TripWeave.services.mcp_tools', '--port', str(ports[0])]]
+        commands += [['-m', 'TripWeave.services.domain_agent', '--kind', kind, '--port', str(port)]
                      for kind, port in zip(('weather', 'tickets', 'order'), ports[1:])]
         try:
             for i, command in enumerate(commands):
@@ -110,7 +110,7 @@ class NetworkTests(unittest.TestCase):
 
     def test_page_network_mode_and_confirmation(self):
         from streamlit.testing.v1 import AppTest
-        with patch.dict(os.environ, {**self.env, 'SMARTVOYAGE_STACK': '1', 'SMARTVOYAGE_ACCESS_PASSWORD': ''}):
+        with patch.dict(os.environ, {**self.env, 'TRIPWEAVE_STACK': '1', 'TRIPWEAVE_ACCESS_PASSWORD': ''}):
             app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / 'app.py')).run(timeout=25)
             self.assertEqual(app.sidebar.selectbox[0].value, '真实协议演示（规则模型）')
             app.chat_input[0].set_value('北京到上海2026-10-01的火车票，帮我模拟预订1张').run(timeout=25)
@@ -122,7 +122,7 @@ class NetworkTests(unittest.TestCase):
 
     def test_real_mcp_discovery_and_parameterized_query(self):
         async def check():
-            async with streamablehttp_client(self.env['SMARTVOYAGE_MCP_URL']) as (read, write, _):
+            async with streamablehttp_client(self.env['TRIPWEAVE_MCP_URL']) as (read, write, _):
                 async with ClientSession(read, write) as session:
                     await session.initialize()
                     self.assertEqual({t.name for t in (await session.list_tools()).tools},
@@ -140,7 +140,7 @@ class NetworkTests(unittest.TestCase):
                 return {'action': 'call', 'tool': 'query_tickets', 'arguments': {'kind': 'train',
                         'departure_city': '北京', 'arrival_city': '上海', 'travel_date': '2026-10-01'}}
         model = Model()
-        agent = DomainAgent('tickets', model=model, tool_url=self.env['SMARTVOYAGE_MCP_URL'])
+        agent = DomainAgent('tickets', model=model, tool_url=self.env['TRIPWEAVE_MCP_URL'])
         result = asyncio.run(agent.run('测试结构化工具选择', [], 'read-test'))
         self.assertEqual(result['status'], 'success')
         self.assertEqual([t['name'] for t in model.catalog], ['query_tickets'])
@@ -149,12 +149,12 @@ class NetworkTests(unittest.TestCase):
         class Model:
             async def ask(self, *args):
                 return {'action': 'call', 'tool': 'book_simulated_ticket', 'arguments': {}}
-        agent = DomainAgent('tickets', model=Model(), tool_url=self.env['SMARTVOYAGE_MCP_URL'])
+        agent = DomainAgent('tickets', model=Model(), tool_url=self.env['TRIPWEAVE_MCP_URL'])
         with self.assertRaises(Exception):
             asyncio.run(agent.run('不允许查询Agent下单', [], 'blocked'))
 
     def test_offline_agent_removed_from_route_catalog(self):
-        with patch.dict(os.environ, {**self.env, 'SMARTVOYAGE_TICKETS_URL': f'http://127.0.0.1:{free_port()}'}):
+        with patch.dict(os.environ, {**self.env, 'TRIPWEAVE_TICKETS_URL': f'http://127.0.0.1:{free_port()}'}):
             engine = build_engine(demo=True, network=True)
             result = asyncio.run(engine.run('北京到上海2026-10-01的火车票'))
             self.assertNotIn('tickets', engine.registry.items)
@@ -173,7 +173,7 @@ class NetworkTests(unittest.TestCase):
 class BookingTests(unittest.TestCase):
     def test_private_page_requires_password_before_chat(self):
         from streamlit.testing.v1 import AppTest
-        with patch.dict(os.environ, {'SMARTVOYAGE_ACCESS_PASSWORD': 'test-only-private-password', 'SMARTVOYAGE_STACK': '0'}):
+        with patch.dict(os.environ, {'TRIPWEAVE_ACCESS_PASSWORD': 'test-only-private-password', 'TRIPWEAVE_STACK': '0'}):
             app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / 'app.py')).run(timeout=20)
             self.assertFalse(app.chat_input)
             app.text_input[0].set_value('wrong')

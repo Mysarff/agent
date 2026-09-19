@@ -6,15 +6,15 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from SmartVoyage.intelligence.engine import Engine
-from SmartVoyage.intelligence.knowledge import KnowledgeAgent
-from SmartVoyage.intelligence.model import JsonModel
-from SmartVoyage.intelligence.registry import Registry
-from SmartVoyage.intelligence.retrieval import KnowledgeIndex
-from SmartVoyage.intelligence.router import PlanningRouter
-from SmartVoyage.intelligence.runtime import ROOT, build_engine
-from SmartVoyage.intelligence.schemas import Capability, Plan, Step, StepResult
-from SmartVoyage.intelligence.transport import decode_task
+from TripWeave.intelligence.engine import Engine
+from TripWeave.intelligence.knowledge import KnowledgeAgent
+from TripWeave.intelligence.model import JsonModel
+from TripWeave.intelligence.registry import Registry
+from TripWeave.intelligence.retrieval import KnowledgeIndex
+from TripWeave.intelligence.router import PlanningRouter
+from TripWeave.intelligence.runtime import ROOT, build_engine
+from TripWeave.intelligence.schemas import Capability, Plan, Step, StepResult
+from TripWeave.intelligence.transport import decode_task
 
 
 def step(id="a", capability="tickets", dependencies=None):

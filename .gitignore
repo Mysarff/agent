@@ -20,3 +20,8 @@ SmartVoyage/var/
 *.sqlite3-shm
 *.sqlite3-wal
 reports/
+
+# Renamed application; original course credentials remain excluded above.
+TripWeave/var/
+TripWeave/logs/
+TripWeave/config.py

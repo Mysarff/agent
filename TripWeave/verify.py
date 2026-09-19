@@ -23,10 +23,10 @@ class RecordedResult(unittest.TextTestResult):
 
 def main():
     started = time.perf_counter()
-    suite = unittest.defaultTestLoader.discover(str(ROOT / 'SmartVoyage/tests'), top_level_dir=str(ROOT))
+    suite = unittest.defaultTestLoader.discover(str(ROOT / 'TripWeave/tests'), top_level_dir=str(ROOT))
     result = unittest.TextTestRunner(verbosity=2, resultclass=RecordedResult).run(suite)
     hashes = {}
-    for directory in ('SmartVoyage/intelligence', 'SmartVoyage/knowledge', 'SmartVoyage/tests', 'SmartVoyage/services'):
+    for directory in ('TripWeave/intelligence', 'TripWeave/knowledge', 'TripWeave/tests', 'TripWeave/services'):
         for path in sorted((ROOT / directory).rglob('*')):
             if path.suffix in ('.py', '.json'):
                 hashes[path.relative_to(ROOT).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()

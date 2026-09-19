@@ -9,7 +9,7 @@ APP = str(Path(__file__).resolve().parents[1] / "app.py")
 
 class UITests(unittest.TestCase):
     def test_unconfigured_llm_keeps_page_and_example_usable(self):
-        with patch.dict('os.environ', {'SMARTVOYAGE_API_KEY': '', 'SMARTVOYAGE_MODEL': '', 'SMARTVOYAGE_STACK': '0', 'SMARTVOYAGE_MODEL_MODE': 'rules'}):
+        with patch.dict('os.environ', {'TRIPWEAVE_API_KEY': '', 'TRIPWEAVE_MODEL': '', 'TRIPWEAVE_STACK': '0', 'TRIPWEAVE_MODEL_MODE': 'rules'}):
             app = AppTest.from_file(APP).run(timeout=15)
             app.sidebar.selectbox[0].select('LLM 多 Agent 协作').run()
             self.assertFalse(app.exception)
@@ -21,7 +21,7 @@ class UITests(unittest.TestCase):
             self.assertIn('样例数据库', app.chat_message[-1].markdown[0].value)
 
     def test_model_configured_but_agents_not_restarted_is_not_live(self):
-        with patch.dict('os.environ', {'SMARTVOYAGE_API_KEY': 'test-placeholder', 'SMARTVOYAGE_MODEL': 'test', 'SMARTVOYAGE_MODEL_MODE': 'rules', 'SMARTVOYAGE_STACK': '0'}):
+        with patch.dict('os.environ', {'TRIPWEAVE_API_KEY': 'test-placeholder', 'TRIPWEAVE_MODEL': 'test', 'TRIPWEAVE_MODEL_MODE': 'rules', 'TRIPWEAVE_STACK': '0'}):
             app = AppTest.from_file(APP).run(timeout=15)
             app.sidebar.selectbox[0].select('LLM 多 Agent 协作').run()
             self.assertFalse(app.exception)

@@ -32,7 +32,7 @@ class DomainAgent:
     def __init__(self, kind, model=None, tool_url=None):
         self.kind, self.tool_url = kind, tool_url or mcp_url()
         self.model = model
-        self.mode = os.getenv('SMARTVOYAGE_MODEL_MODE', 'rules')
+        self.mode = os.getenv('TRIPWEAVE_MODEL_MODE', 'rules')
         if model is None and self.mode == 'llm':
             self.model = load_llm()
 

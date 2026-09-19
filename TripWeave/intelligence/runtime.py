@@ -17,8 +17,8 @@ def build_engine(demo: bool = True, network: bool = False) -> Engine:
         from .demo import DemoModel, DemoTransport
         model, transport = DemoModel(), DemoTransport()
     elif network:
-        from SmartVoyage.services.settings import agent_url, load_llm
-        from SmartVoyage.services.rules import ProtocolDemoModel
+        from TripWeave.services.settings import agent_url, load_llm
+        from TripWeave.services.rules import ProtocolDemoModel
         from .transport import A2ATransport
         for capability in registry.configured:
             if capability.handler == 'a2a':
@@ -32,13 +32,13 @@ def build_engine(demo: bool = True, network: bool = False) -> Engine:
         from langchain_openai import ChatOpenAI
         from .model import JsonModel, LoopIndependentChat
         from .transport import A2ATransport
-        key = os.getenv("SMARTVOYAGE_API_KEY")
-        name = os.getenv("SMARTVOYAGE_MODEL")
+        key = os.getenv("TRIPWEAVE_API_KEY")
+        name = os.getenv("TRIPWEAVE_MODEL")
         if not key or not name:
-            raise ValueError("请先设置自己的 SMARTVOYAGE_API_KEY 和 SMARTVOYAGE_MODEL；可选 SMARTVOYAGE_BASE_URL。")
+            raise ValueError("请先设置自己的 TRIPWEAVE_API_KEY 和 TRIPWEAVE_MODEL；可选 TRIPWEAVE_BASE_URL。")
         options = {"model": name, "api_key": key, "temperature": 0, "timeout": 25, "max_retries": 0}
-        if os.getenv("SMARTVOYAGE_BASE_URL"):
-            options["base_url"] = os.environ["SMARTVOYAGE_BASE_URL"]
+        if os.getenv("TRIPWEAVE_BASE_URL"):
+            options["base_url"] = os.environ["TRIPWEAVE_BASE_URL"]
         model, transport = JsonModel(LoopIndependentChat(ChatOpenAI(**options))), A2ATransport()
     return Engine(PlanningRouter(model, registry), KnowledgeAgent(model, index), transport, model,
                   timeout=60 if network else 35)

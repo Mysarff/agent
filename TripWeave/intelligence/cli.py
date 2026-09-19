@@ -6,7 +6,7 @@ from .runtime import build_engine
 
 
 def main():
-    parser = argparse.ArgumentParser(description="SmartVoyage：能力路由与有据问答")
+    parser = argparse.ArgumentParser(description="TripWeave：能力路由与有据问答")
     parser.add_argument("--live", action="store_true", help="连接自己配置的模型与原 A2A/MCP 服务")
     parser.add_argument("--demo", action="store_true", help="离线固定样例（默认）")
     parser.add_argument("--network", action="store_true", help="真实A2A/MCP协议链路；默认规则模型，配合--live使用LLM")
@@ -19,7 +19,7 @@ def main():
     except ValueError as exc:
         print(str(exc))
         return 2
-    print("SmartVoyage · " + ("连接模式" if args.live else "离线固定场景演示，不代表真实模型表现"))
+    print("TripWeave · " + ("连接模式" if args.live else "离线固定场景演示，不代表真实模型表现"))
     history = []
     pending = None
     while True:

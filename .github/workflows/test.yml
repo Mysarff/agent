@@ -13,7 +13,7 @@ jobs:
           python-version: '3.12'
           cache: pip
       - run: python -m pip install -r requirements.txt
-      - run: python -m SmartVoyage.verify
+      - run: python -m TripWeave.verify
       - uses: actions/upload-artifact@v4
         if: always()
         with:

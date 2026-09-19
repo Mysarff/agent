@@ -1,6 +1,6 @@
 """协议演示用规则模型：明确区别于真实 LLM，不伪造模型效果指标。"""
 import re
-from SmartVoyage.intelligence.demo import DemoModel
+from TripWeave.intelligence.demo import DemoModel
 
 
 class ProtocolDemoModel(DemoModel):

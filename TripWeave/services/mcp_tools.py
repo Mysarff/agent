@@ -12,14 +12,14 @@ from .settings import db_path
 
 def build_server(port=8001, path=None):
     store = TravelStore(path or db_path())
-    server = FastMCP('SmartVoyageTravelTools', host='127.0.0.1', port=port,
+    server = FastMCP('TripWeaveTravelTools', host='127.0.0.1', port=port,
                      stateless_http=True, json_response=True, log_level='WARNING')
 
     @server.tool()
     async def query_weather(city: str, travel_date: str) -> dict:
         """按城市和 YYYY-MM-DD 日期查询天气。提供者由服务端配置，不接受 SQL。"""
         day = date.fromisoformat(travel_date)
-        provider = os.getenv('SMARTVOYAGE_WEATHER_PROVIDER', 'sample')
+        provider = os.getenv('TRIPWEAVE_WEATHER_PROVIDER', 'sample')
         if provider == 'sample':
             if city not in ('北京', '上海') or travel_date != '2026-10-01':
                 return {'status': 'no_data', 'message': '样例仅含北京/上海 2026-10-01；实时预报请配置 open_meteo'}

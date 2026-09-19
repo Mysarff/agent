@@ -6,14 +6,14 @@ import unittest
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from SmartVoyage.intelligence.knowledge import KnowledgeAgent
-from SmartVoyage.intelligence.model import JsonModel, LoopIndependentChat
-from SmartVoyage.intelligence.registry import Registry
-from SmartVoyage.intelligence.retrieval import KnowledgeIndex
-from SmartVoyage.intelligence.router import PlanningRouter
-from SmartVoyage.intelligence.runtime import ROOT
-from SmartVoyage.intelligence.schemas import Capability, Step
-from SmartVoyage.intelligence.transport import A2ATransport
+from TripWeave.intelligence.knowledge import KnowledgeAgent
+from TripWeave.intelligence.model import JsonModel, LoopIndependentChat
+from TripWeave.intelligence.registry import Registry
+from TripWeave.intelligence.retrieval import KnowledgeIndex
+from TripWeave.intelligence.router import PlanningRouter
+from TripWeave.intelligence.runtime import ROOT
+from TripWeave.intelligence.schemas import Capability, Step
+from TripWeave.intelligence.transport import A2ATransport
 
 
 class FixtureHandler(BaseHTTPRequestHandler):
