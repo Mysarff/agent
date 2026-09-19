@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from streamlit.testing.v1 import AppTest
@@ -7,6 +8,26 @@ APP = str(Path(__file__).resolve().parents[1] / "app.py")
 
 
 class UITests(unittest.TestCase):
+    def test_unconfigured_llm_keeps_page_and_example_usable(self):
+        with patch.dict('os.environ', {'SMARTVOYAGE_API_KEY': '', 'SMARTVOYAGE_MODEL': '', 'SMARTVOYAGE_STACK': '0', 'SMARTVOYAGE_MODEL_MODE': 'rules'}):
+            app = AppTest.from_file(APP).run(timeout=15)
+            app.sidebar.selectbox[0].select('LLM 多 Agent 协作').run()
+            self.assertFalse(app.exception)
+            self.assertTrue(app.chat_input)
+            self.assertTrue(any('未调用 LLM' in w.value for w in app.warning))
+            next(b for b in app.button if b.label == '了解数据来源').click().run()
+            self.assertFalse(app.exception)
+            self.assertEqual(len(app.chat_message), 2)
+            self.assertIn('样例数据库', app.chat_message[-1].markdown[0].value)
+
+    def test_model_configured_but_agents_not_restarted_is_not_live(self):
+        with patch.dict('os.environ', {'SMARTVOYAGE_API_KEY': 'test-placeholder', 'SMARTVOYAGE_MODEL': 'test', 'SMARTVOYAGE_MODEL_MODE': 'rules', 'SMARTVOYAGE_STACK': '0'}):
+            app = AppTest.from_file(APP).run(timeout=15)
+            app.sidebar.selectbox[0].select('LLM 多 Agent 协作').run()
+            self.assertFalse(app.exception)
+            self.assertTrue(app.warning)
+            self.assertEqual(app.session_state['engine_mode'], '离线演示')
+
     def test_knowledge_question_shows_evidence(self):
         app = AppTest.from_file(APP).run(timeout=15)
         self.assertEqual(len(app.exception), 0)

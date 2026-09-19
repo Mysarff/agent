@@ -7,10 +7,12 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-import httpx
+from dotenv import load_dotenv
 
 
 def main():
+    root = Path(__file__).resolve().parents[2]
+    load_dotenv(root / '.env', override=False)
     parser = argparse.ArgumentParser()
     parser.add_argument('--live', action='store_true', default=os.getenv('SMARTVOYAGE_MODEL_MODE') == 'llm', help='协调器及领域Agent都使用外部LLM')
     parser.add_argument('--no-ui', action='store_true')
@@ -29,7 +31,6 @@ def main():
                 parser.error(f'端口 {port} 已占用；请停止自己的旧服务后再启动，不会结束其他进程')
     env = {**os.environ, 'SMARTVOYAGE_MODEL_MODE': 'llm' if args.live else 'rules',
            'SMARTVOYAGE_STACK': '1', 'PYTHONUNBUFFERED': '1'}
-    root = Path(__file__).resolve().parents[2]
     children = []
     def shutdown(*_):
         raise KeyboardInterrupt

@@ -42,7 +42,7 @@ flowchart TD
 
 ## 配置真实 LLM
 
-本地 Python 进程从环境变量读取配置；不会自动加载 `.env` 或原课程 `config.py`。
+启动器会读取仓库根目录的 `.env`，已有环境变量优先；不读取原课程 `config.py`。把 `.env.example` 复制为 `.env` 后填写配置，不要提交密钥。
 
 | 变量 | 用途 |
 | --- | --- |
@@ -53,7 +53,7 @@ flowchart TD
 | `SMARTVOYAGE_DB` | 可选 SQLite 路径，默认 `SmartVoyage/var/travel.sqlite3` |
 | `SMARTVOYAGE_ACCESS_PASSWORD` | 私有演示访问口令；非本机监听要求至少 12 字符 |
 
-设置模型变量后运行 `python -m SmartVoyage.services.stack --live`，页面选择“LLM 多 Agent 协作”。协调器用 LLM 拆解复合需求，领域 Agent 用 LLM 根据 MCP 实际工具 Schema 提取参数与选择工具。规则模式是可复现演示，不能当作 LLM 效果数据。
+填写配置后先停止旧服务，再运行 `python -m SmartVoyage.services.stack --live`，页面选择“LLM 多 Agent 协作”。协调器用 LLM 拆解需求，领域 Agent 用 LLM 根据 MCP 工具 Schema 提取参数。未配置或未重启到 LLM 模式时，页面显示启用说明，并明确使用示例模式继续体验，不会出现只剩错误框的页面。规则模式不能当作 LLM 效果数据。
 
 服务地址可用 `SMARTVOYAGE_WEATHER_URL`、`SMARTVOYAGE_TICKETS_URL`、`SMARTVOYAGE_ORDER_URL`、`SMARTVOYAGE_MCP_URL` 配置。默认启动器使用本机固定端口；分机部署需自行分别启动服务并配置可信地址和网络访问控制。
 
@@ -65,9 +65,31 @@ python -m SmartVoyage.verify
 
 测试覆盖本地真实 A2A → Streamable HTTP MCP → SQLite 的多步骤协作、引用校验、服务下线、非法工具调用、人工确认、库存事务与重复请求重放。外部 LLM 质量、在线真实票务和生产负载不在本地测试结论内。
 
-- [改动、调用链与源码阅读顺序](docs/旅行助手_改动与学习流程.md)
-- [GitHub 发布与服务器部署](docs/旅行助手_发布部署.md)
-- [验证结果](reports/intelligence_verification.json)
+生成的结果保存在 `reports/`，不提交仓库。GitHub 自动测试的报告可在 [Actions](https://github.com/Mysarff/agent/actions) 对应运行的 Artifacts 下载。
+
+## 文件与学习顺序
+
+| 位置 | 用途 |
+| --- | --- |
+| `SmartVoyage/intelligence/registry.py`、`router.py` | Agent 能力发现、路由、计划校验 |
+| `SmartVoyage/intelligence/engine.py`、`transport.py` | 并发与依赖调度、确认、A2A 调用 |
+| `SmartVoyage/services/domain_agent.py`、`mcp_tools.py` | 领域 Agent 选择和调用 MCP 工具 |
+| `SmartVoyage/services/data.py` | 参数化查询、模拟订单事务及去重 |
+| `SmartVoyage/knowledge/` | RAG 的资料来源 |
+| `SmartVoyage/tests/`、`.github/workflows/` | 本地测试与 GitHub 自动检查 |
+
+本次在原旅行场景上增加能力发现、结构化规划、真实 A2A/MCP 调用记录，将固定预订成功文本改为可查询的模拟订单。预订去重只针对同一请求 ID；待确认任务仍保存在当前会话，未实现跨进程恢复。
+
+## 服务器部署（私有演示）
+
+1. 克隆仓库，把 `.env.example` 复制为 `.env`。
+2. 设置自己的随机 `SMARTVOYAGE_ACCESS_PASSWORD`，至少 12 字符。
+3. 执行 `docker compose up -d --build`。默认使用规则模型，数据卷保存模拟订单。
+4. 在自己的电脑使用 `ssh -L 8501:127.0.0.1:8501 用户名@服务器地址` 建立隧道，访问 `http://127.0.0.1:8501`。
+
+需要域名访问时，增加支持 WebSocket 的 HTTPS 反向代理，指向服务器 `127.0.0.1:8501`。不要开放内部 A2A/MCP 端口。访问口令是演示门禁，不是完整账户与限流系统。LLM 模式在 `.env` 设置 `SMARTVOYAGE_MODEL_MODE=llm` 及模型变量后重建容器。
+
+Docker 构建尚未在可用引擎中验证；本项目未部署公网应用。GitHub 保存代码，GitHub Pages 不能直接运行此 Python 服务。查看 [GitHub Pages 说明](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages)。
 
 ## 来源与范围
 
