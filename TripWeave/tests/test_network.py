@@ -19,6 +19,7 @@ from mcp.client.streamable_http import streamablehttp_client
 from TripWeave.intelligence.runtime import build_engine
 from TripWeave.services.data import TravelStore
 from TripWeave.services.domain_agent import DomainAgent
+from TripWeave.services.stack import stop_children
 
 
 def free_port():
@@ -70,18 +71,22 @@ class NetworkTests(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        for process in cls.children:
-            if process.poll() is None:
-                process.terminate()
-        for process in cls.children:
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait()
+        stop_children(cls.children)
         for log in cls.logs:
             log.close()
         cls.temp.cleanup()
+
+    def test_cli_queries_current_network_services(self):
+        result = subprocess.run([sys.executable, '-m', 'TripWeave.main', '--network', '--question',
+                                 '北京2026-10-01的天气'],
+            cwd=Path(__file__).resolve().parents[2],
+            env={**os.environ, **self.env, 'PYTHONIOENCODING': 'utf-8'},
+            capture_output=True, text=True, encoding='utf-8', timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('真实 A2A/MCP 协议演示（规则模型）', result.stdout)
+        self.assertIn('24', result.stdout)
+        self.assertIn('available', result.stdout)
+        self.assertNotIn('路由未完成', result.stdout)
 
     def test_full_multi_agent_handoff_and_confirmation(self):
         with patch.dict(os.environ, self.env):

@@ -5,6 +5,7 @@ import threading
 import unittest
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from unittest.mock import patch
 
 from TripWeave.intelligence.knowledge import KnowledgeAgent
 from TripWeave.intelligence.model import JsonModel, LoopIndependentChat
@@ -70,6 +71,24 @@ def fixture_server():
 
 
 class ProtocolTests(unittest.TestCase):
+    def test_live_runtime_uses_structured_tripweave_services_by_default(self):
+        from TripWeave.intelligence.runtime import build_engine
+        with patch('TripWeave.services.settings.load_llm', return_value=object()):
+            engine = build_engine(demo=False)
+        self.assertTrue(engine.registry.discovery_enabled)
+        self.assertEqual(engine.timeout, 60)
+        remote = [c for c in engine.registry.configured if c.handler == 'a2a']
+        self.assertEqual(len(remote), 3)
+        self.assertTrue(all(c.structured_request for c in remote))
+
+    def test_cli_live_loads_env_and_selects_current_network(self):
+        from TripWeave.intelligence import cli
+        with patch('sys.argv', ['TripWeave', '--live']), patch.object(cli, 'load_dotenv') as load, \
+             patch.object(cli, 'build_engine') as build, patch('builtins.input', return_value='/quit'):
+            self.assertEqual(cli.main(), 0)
+        build.assert_called_once_with(demo=False, network=True)
+        load.assert_called_once_with(ROOT.parent / '.env', override=False)
+
     def test_real_chat_sdk_router_and_rag_across_event_loops(self):
         from langchain_openai import ChatOpenAI
         with fixture_server() as (server, url):

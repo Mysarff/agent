@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 from .engine import Engine
@@ -11,12 +10,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def build_engine(demo: bool = True, network: bool = False) -> Engine:
+    # 真实模型统一使用 TripWeave 的结构化 A2A/MCP 服务。
+    network = network or not demo
     registry = Registry.load(ROOT / "intelligence" / "capabilities.json")
     index = KnowledgeIndex(ROOT / "knowledge")
     if demo and not network:
         from .demo import DemoModel, DemoTransport
         model, transport = DemoModel(), DemoTransport()
-    elif network:
+    else:
         from TripWeave.services.settings import agent_url, load_llm
         from TripWeave.services.rules import ProtocolDemoModel
         from .transport import A2ATransport
@@ -28,17 +29,5 @@ def build_engine(demo: bool = True, network: bool = False) -> Engine:
         registry.discovery_enabled = True
         model = ProtocolDemoModel() if demo else load_llm()
         transport = A2ATransport(timeout=55)
-    else:
-        from langchain_openai import ChatOpenAI
-        from .model import JsonModel, LoopIndependentChat
-        from .transport import A2ATransport
-        key = os.getenv("TRIPWEAVE_API_KEY")
-        name = os.getenv("TRIPWEAVE_MODEL")
-        if not key or not name:
-            raise ValueError("请先设置自己的 TRIPWEAVE_API_KEY 和 TRIPWEAVE_MODEL；可选 TRIPWEAVE_BASE_URL。")
-        options = {"model": name, "api_key": key, "temperature": 0, "timeout": 25, "max_retries": 0}
-        if os.getenv("TRIPWEAVE_BASE_URL"):
-            options["base_url"] = os.environ["TRIPWEAVE_BASE_URL"]
-        model, transport = JsonModel(LoopIndependentChat(ChatOpenAI(**options))), A2ATransport()
     return Engine(PlanningRouter(model, registry), KnowledgeAgent(model, index), transport, model,
                   timeout=60 if network else 35)

@@ -10,7 +10,6 @@ SmartVoyage/logs/
 # 旧课程配置可能含凭证，不应直接发布。
 SmartVoyage/config.py
 agent_learn/config.py
-ResolveDesk/var/
 .release-env/
 .uv-cache/
 release/

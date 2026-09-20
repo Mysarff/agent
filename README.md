@@ -2,6 +2,8 @@
 
 天气、票务与预订分别由领域 Agent 处理。协调器选择能力并安排任务，领域 Agent 通过真实 MCP 客户端发现和调用工具；预订在用户确认后创建本地模拟订单。
 
+本仓库当前维护项目为 **TripWeave 旅行助手**。从 `TripWeave/services/stack.py` 启动，不需要课程原版代码、MySQL 或私人配置文件。
+
 **真实网络协议、明确的数据来源。** 票务为自建演示数据，不提供实时余票、真实出票或支付。默认采用规则模型，LLM 模式需要配置自己的模型服务。
 
 ## 三分钟运行
@@ -56,6 +58,18 @@ flowchart TD
 填写配置后先停止旧服务，再运行 `python -m TripWeave.services.stack --live`，页面选择“LLM 多 Agent 协作”。协调器用 LLM 拆解需求，领域 Agent 用 LLM 根据 MCP 工具 Schema 提取参数。未配置或未重启到 LLM 模式时，页面显示启用说明，并明确使用示例模式继续体验，不会出现只剩错误框的页面。规则模式不能当作 LLM 效果数据。
 
 服务地址可用 `TRIPWEAVE_WEATHER_URL`、`TRIPWEAVE_TICKETS_URL`、`TRIPWEAVE_ORDER_URL`、`TRIPWEAVE_MCP_URL` 配置。默认启动器使用本机固定端口；分机部署需自行分别启动服务并配置可信地址和网络访问控制。
+
+### 命令行入口
+
+只体验离线固定文本：`python -m TripWeave.main --demo`。
+
+使用真实协议的规则演示，先在一个终端运行 `python -m TripWeave.services.stack --no-ui`，再在另一个终端运行：
+
+```bash
+python -m TripWeave.main --network --question "北京2026-10-01的天气"
+```
+
+使用真实 LLM，填写根目录 `.env` 后，先运行 `python -m TripWeave.services.stack --live --no-ui`，再运行 `python -m TripWeave.main --live`。CLI 和网页使用同一套 TripWeave A2A/MCP 服务；CLI 也会读取根目录 `.env`。切换服务模式前先停止旧服务。
 
 ## 相比课程原版，具体改了什么
 

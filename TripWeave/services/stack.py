@@ -10,6 +10,24 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 
+def stop_children(children):
+    """仅回收本次启动的进程；Windows 需包括虚拟环境启动器的子进程。"""
+    for child in children:
+        if child.poll() is None:
+            if os.name == 'nt':
+                subprocess.run(['taskkill', '/PID', str(child.pid), '/T', '/F'],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                               timeout=10, check=False, creationflags=subprocess.CREATE_NO_WINDOW)
+            else:
+                child.terminate()
+    for child in children:
+        try:
+            child.wait(timeout=8)
+        except subprocess.TimeoutExpired:
+            child.kill()
+            child.wait(timeout=5)
+
+
 def main():
     root = Path(__file__).resolve().parents[2]
     load_dotenv(root / '.env', override=False)
@@ -52,15 +70,7 @@ def main():
     except KeyboardInterrupt:
         return 0
     finally:
-        for child in children:
-            if child.poll() is None:
-                child.terminate()
-        for child in children:
-            try:
-                child.wait(timeout=8)
-            except subprocess.TimeoutExpired:
-                child.kill()
-                child.wait()
+        stop_children(children)
 
 
 if __name__ == '__main__':

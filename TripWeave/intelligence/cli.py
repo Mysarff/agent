@@ -1,25 +1,30 @@
 import argparse
 import asyncio
 import json
+from pathlib import Path
+
+from dotenv import load_dotenv
 
 from .runtime import build_engine
 
 
 def main():
+    load_dotenv(Path(__file__).resolve().parents[2] / '.env', override=False)
     parser = argparse.ArgumentParser(description="TripWeave：能力路由与有据问答")
-    parser.add_argument("--live", action="store_true", help="连接自己配置的模型与原 A2A/MCP 服务")
+    parser.add_argument("--live", action="store_true", help="使用自己的模型与 TripWeave A2A/MCP 服务；请先以 --live 启动服务栈")
     parser.add_argument("--demo", action="store_true", help="离线固定样例（默认）")
     parser.add_argument("--network", action="store_true", help="真实A2A/MCP协议链路；默认规则模型，配合--live使用LLM")
     parser.add_argument("--question", help="执行单个问题后退出")
     args = parser.parse_args()
-    if args.live and args.demo:
-        parser.error("--live 和 --demo 不能同时使用")
+    if args.demo and (args.live or args.network):
+        parser.error("--demo 不能与 --live 或 --network 同时使用")
     try:
-        engine = build_engine(demo=not args.live, network=args.network)
+        engine = build_engine(demo=not args.live, network=args.network or args.live)
     except ValueError as exc:
         print(str(exc))
         return 2
-    print("TripWeave · " + ("连接模式" if args.live else "离线固定场景演示，不代表真实模型表现"))
+    mode = "LLM + TripWeave A2A/MCP 服务" if args.live else "真实 A2A/MCP 协议演示（规则模型）" if args.network else "离线固定场景演示，不代表真实模型表现"
+    print("TripWeave · " + mode)
     history = []
     pending = None
     while True:
