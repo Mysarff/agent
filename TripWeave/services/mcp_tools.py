@@ -56,11 +56,14 @@ def build_server(port=8001, path=None):
         return store.tickets(kind, departure_city, arrival_city, travel_date)
 
     @server.tool()
-    def book_simulated_ticket(ticket_id: str, quantity: int, request_id: str) -> dict:
-        """仅创建本地模拟订单；request_id由执行器注入，支持同请求重放，无真实出票。"""
-        if not request_id or len(request_id) > 128:
-            raise ValueError('请求ID不合法')
-        return store.book(ticket_id, quantity, request_id)
+    def prepare_simulated_booking(ticket_id: str, quantity: int) -> dict:
+        """核对票号数量、当前价格和库存，生成5分钟报价；不锁库存、不创建订单。"""
+        return store.prepare(ticket_id, quantity)
+
+    @server.tool()
+    def book_simulated_ticket(quote_id: str, request_id: str) -> dict:
+        """仅提交已经展示给用户确认的报价ID；事务复查库存价格，同报价只创建一个模拟订单。"""
+        return store.book(quote_id, request_id)
 
     return server
 

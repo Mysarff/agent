@@ -9,5 +9,3 @@
 !TripWeave/intelligence/*.json
 !TripWeave/services/
 !TripWeave/services/*.py
-!TripWeave/knowledge/
-!TripWeave/knowledge/*.json

@@ -1,9 +1,7 @@
 from pathlib import Path
 
 from .engine import Engine
-from .knowledge import KnowledgeAgent
 from .registry import Registry
-from .retrieval import KnowledgeIndex
 from .router import PlanningRouter
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -13,7 +11,6 @@ def build_engine(demo: bool = True, network: bool = False) -> Engine:
     # 真实模型统一使用 TripWeave 的结构化 A2A/MCP 服务。
     network = network or not demo
     registry = Registry.load(ROOT / "intelligence" / "capabilities.json")
-    index = KnowledgeIndex(ROOT / "knowledge")
     if demo and not network:
         from .demo import DemoModel, DemoTransport
         model, transport = DemoModel(), DemoTransport()
@@ -29,5 +26,5 @@ def build_engine(demo: bool = True, network: bool = False) -> Engine:
         registry.discovery_enabled = True
         model = ProtocolDemoModel() if demo else load_llm()
         transport = A2ATransport(timeout=55)
-    return Engine(PlanningRouter(model, registry), KnowledgeAgent(model, index), transport, model,
+    return Engine(PlanningRouter(model, registry), transport, model,
                   timeout=60 if network else 35)

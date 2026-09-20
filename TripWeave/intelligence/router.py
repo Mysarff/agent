@@ -10,13 +10,13 @@ class PlanningRouter:
         self.model = model
         self.registry = registry
 
-    async def route(self, query: str, history: list[dict]) -> tuple[Plan, dict]:
+    async def route(self, query: str, history: list[dict], context: dict | None = None) -> tuple[Plan, dict]:
         await self.registry.refresh()
         preferred = self.registry.candidates(query)
         payload = {"query": query, "history": history[-8:], "preferred": preferred,
                    "catalog": self.registry.catalog(self.registry.ids),
                    "current_date": datetime.now(timezone(timedelta(hours=8))).date().isoformat(),
-                   "service_discovery": self.registry.discovery_trace}
+                   "service_discovery": self.registry.discovery_trace, "session": context or {}}
         # 全量能力目录保留给模型，避免词法召回失败直接导致能力不可达。
         for attempt in range(2):
             try:

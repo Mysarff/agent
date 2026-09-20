@@ -34,44 +34,43 @@ class Capability(StrictModel):
     id: str
     description: str
     examples: list[str]
-    handler: Literal["a2a", "knowledge", "generation"]
+    handler: Literal["a2a", "generation"]
     endpoint: str | None = None
     requires_confirmation: bool = False
     data_notice: str = ""
     structured_request: bool = False
 
 
-class Evidence(StrictModel):
-    source_id: str
-    quote: str = Field(min_length=6, max_length=600)
-
-
-class Claim(StrictModel):
-    text: str = Field(min_length=1, max_length=1000)
-    evidence: list[Evidence] = Field(min_length=1, max_length=3)
-
-
-class GroundedAnswer(StrictModel):
-    supported: bool
-    claims: list[Claim] = Field(default_factory=list, max_length=5)
-
-    @model_validator(mode="after")
-    def check_support(self):
-        if self.supported != bool(self.claims):
-            raise ValueError("有据回答需包含带引用的结论，无据时不得生成结论")
-        return self
-
-
 class StepResult(StrictModel):
     step_id: str
     capability: str
-    status: Literal["success", "failed", "input_required", "blocked", "insufficient_evidence",
+    status: Literal["success", "failed", "input_required", "blocked",
                     "awaiting_confirmation", "cancelled"]
     text: str
-    sources: list[dict] = Field(default_factory=list)
+    data: dict = Field(default_factory=dict)
     elapsed_ms: float = 0
     error_code: str | None = None
     trace: list[dict] = Field(default_factory=list)
+
+
+class Ticket(StrictModel):
+    id: str = Field(min_length=1)
+    kind: Literal['train', 'flight', 'concert']
+    departure_city: str
+    arrival_city: str
+    travel_date: str
+    service: str
+    seat: str
+    price: float = Field(ge=0, allow_inf_nan=False)
+    remaining: int = Field(ge=0)
+
+
+class BookingQuote(StrictModel):
+    quote_id: str = Field(min_length=1)
+    ticket: Ticket
+    quantity: int = Field(ge=1, le=5)
+    amount: float = Field(ge=0, allow_inf_nan=False)
+    expires_at: float = Field(allow_inf_nan=False)
 
 
 class RunResult(StrictModel):

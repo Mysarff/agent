@@ -7,10 +7,8 @@ from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest.mock import patch
 
-from TripWeave.intelligence.knowledge import KnowledgeAgent
 from TripWeave.intelligence.model import JsonModel, LoopIndependentChat
 from TripWeave.intelligence.registry import Registry
-from TripWeave.intelligence.retrieval import KnowledgeIndex
 from TripWeave.intelligence.router import PlanningRouter
 from TripWeave.intelligence.runtime import ROOT
 from TripWeave.intelligence.schemas import Capability, Step
@@ -28,11 +26,9 @@ class FixtureHandler(BaseHTTPRequestHandler):
         if self.path == '/v1/chat/completions':
             payload = json.loads(body['messages'][-1]['content'])
             if 'catalog' in payload:
-                answer = {'action': 'execute', 'steps': [{'id': 'k', 'capability': 'knowledge', 'query': payload['query']}]}
+                answer = {'action': 'execute', 'steps': [{'id': 'w', 'capability': 'weather', 'query': payload['query']}]}
             else:
-                hit = payload['evidence'][0]
-                quote = hit['text'].split('。')[0] + '。'
-                answer = {'supported': True, 'claims': [{'text': quote, 'evidence': [{'source_id': hit['id'], 'quote': quote}]}]}
+                answer = {'intents': ['weather'], 'city': '北京', 'travel_date': '2026-10-01'}
             response = {'id': 'fixture-chat', 'object': 'chat.completion', 'created': 0, 'model': 'fixture-model',
                         'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': json.dumps(answer, ensure_ascii=False)}, 'finish_reason': 'stop'}],
                         'usage': {'prompt_tokens': 10, 'completion_tokens': 10, 'total_tokens': 20}}
@@ -89,22 +85,19 @@ class ProtocolTests(unittest.TestCase):
         build.assert_called_once_with(demo=False, network=True)
         load.assert_called_once_with(ROOT.parent / '.env', override=False)
 
-    def test_real_chat_sdk_router_and_rag_across_event_loops(self):
+    def test_real_chat_sdk_context_and_router_across_event_loops(self):
         from langchain_openai import ChatOpenAI
+        from TripWeave.intelligence.session import Turn, CONTEXT_PROMPT
         with fixture_server() as (server, url):
             llm = ChatOpenAI(model='fixture-model', api_key='local-test-placeholder', base_url=url + '/v1', max_retries=0, timeout=3)
             model = JsonModel(LoopIndependentChat(llm), timeout=5)
-            registry = Registry.load(ROOT / 'intelligence/capabilities.json')
-            router = PlanningRouter(model, registry)
-            knowledge = KnowledgeAgent(model, KnowledgeIndex(ROOT / 'knowledge'))
+            router = PlanningRouter(model, Registry.load(ROOT / 'intelligence/capabilities.json'))
             try:
                 for _ in range(2):
-                    plan, trace = asyncio.run(router.route('项目票务数据是真的吗', []))
-                    result = asyncio.run(knowledge.answer('k', 'knowledge', plan.steps[0].query))
-                    self.assertEqual(result.status, 'success')
-                    self.assertEqual(trace['selected'], ['knowledge'])
+                    turn = Turn.model_validate(asyncio.run(model.ask('context', CONTEXT_PROMPT, {'query':'北京2026-10-01天气'})))
+                    result, trace = asyncio.run(router.route('北京2026-10-01天气', [], {'requested':turn.intents}))
+                    self.assertEqual(trace['selected'], ['weather'])
                 self.assertEqual(len(server.calls), 4)
-                self.assertEqual(model.calls[-1]['usage']['total_tokens'], 20)
             finally:
                 llm.root_client.close()
 

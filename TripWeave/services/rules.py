@@ -1,25 +1,22 @@
-"""协议演示用规则模型：明确区别于真实 LLM，不伪造模型效果指标。"""
+"""有限语法规则模型，仅用于无需API的可重复演示。"""
 import re
-from TripWeave.intelligence.demo import DemoModel
+from TripWeave.intelligence.session import parse_turn
 
 
-class ProtocolDemoModel(DemoModel):
+class ProtocolDemoModel:
     async def ask(self, purpose, system, payload):
-        if purpose != 'route':
-            return await super().ask(purpose, system, payload)
-        query = payload['query']
-        steps = []
-        for capability, words in [('weather', ('天气', '温度', '下雨')), ('tickets', ('火车', '高铁', '机票', '航班', '演出票')),
-                                   ('knowledge', ('资料', '项目', '来源', '说明'))]:
-            if any(w in query for w in words):
-                steps.append({'id': capability, 'capability': capability, 'query': query})
-        if any(w in query for w in ('预订', '订票', '下单')):
-            # 演示明确票号可直接下单，其余情况要求先查票并传递结果。
-            deps = [s['id'] for s in steps if s['capability'] == 'tickets']
-            steps.append({'id': 'order', 'capability': 'order', 'query': query, 'depends_on': deps})
-        if not steps:
-            return {'action': 'clarify', 'message': '协议演示支持天气、票务、项目资料和模拟预订；自由理解请配置LLM。', 'steps': []}
-        return {'action': 'execute', 'steps': steps}
+        if purpose == 'context':
+            return parse_turn(payload['query']).model_dump(exclude_none=True)
+        if purpose == 'route':
+            context = payload['session']
+            available = {c['id'] for c in payload['catalog']}
+            if not set(context['requested']) <= available:
+                return {'action': 'clarify', 'message': '所需服务不可用，请检查启动状态。'}
+            steps = [{'id': c, 'capability': c, 'query': context['queries'][c],
+                      'depends_on': ['tickets'] if c == 'order' and 'tickets' in context['requested'] else []}
+                     for c in context['requested']]
+            return {'action': 'execute', 'steps': steps}
+        return {'text': '规则模式不生成自由景点建议；请配置自己的LLM。建议不包含实时核实的信息。'}
 
 
 def domain_plan(kind, query, dependencies):
@@ -33,11 +30,4 @@ def domain_plan(kind, query, dependencies):
         ticket_kind = 'flight' if any(w in query for w in ('机票', '航班')) else 'concert' if '演出票' in query else 'train'
         return {'action': 'call', 'tool': 'query_tickets', 'arguments': {'kind': ticket_kind, 'departure_city': journey.group(1),
                 'arrival_city': journey.group(2), 'travel_date': day.group()}}
-    if kind == 'order':
-        ticket = re.search(r'DEMO-(?:TRAIN|FLIGHT|CONCERT)-\d{3}', query, re.I)
-        quantity = re.search(r'(\d+)\s*张', query)
-        ids = re.findall(r'DEMO-(?:TRAIN|FLIGHT|CONCERT)-\d{3}', str(dependencies))
-        ticket_id = ticket.group().upper() if ticket else next(iter(set(ids))) if len(set(ids)) == 1 else None
-        if ticket_id and quantity:
-            return {'action': 'call', 'tool': 'book_simulated_ticket', 'arguments': {'ticket_id': ticket_id, 'quantity': int(quantity.group(1))}}
     return missing

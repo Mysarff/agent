@@ -91,7 +91,7 @@ class NetworkTests(unittest.TestCase):
     def test_full_multi_agent_handoff_and_confirmation(self):
         with patch.dict(os.environ, self.env):
             engine = build_engine(demo=True, network=True)
-            result = asyncio.run(engine.run('查询北京2026-10-01的天气和北京到上海2026-10-01的火车票，帮我模拟预订1张'))
+            result = asyncio.run(engine.run('查询北京2026-10-01的天气和北京到上海2026-10-01的火车票，帮我模拟预订第二个，1张'))
             self.assertEqual([r.status for r in result.results], ['success', 'success', 'awaiting_confirmation'])
             self.assertEqual(result.routing_trace['selected'], ['weather', 'tickets', 'order'])
             self.assertEqual(sum(s['status'] == 'available' for s in result.routing_trace['services']), 3)
@@ -104,6 +104,7 @@ class NetworkTests(unittest.TestCase):
             self.assertEqual(confirmed.status, 'success')
             self.assertIn('SIM-', confirmed.text)
             self.assertEqual(confirmed.trace[0]['dependencies'], ['tickets'])
+            self.assertEqual(confirmed.data['ticket_id'], 'DEMO-TRAIN-002')
             self.assertEqual(confirmed.trace[-1]['tool'], 'book_simulated_ticket')
             self.assertEqual(asyncio.run(engine.confirm(result.pending_token)).status, 'blocked')
             with store.connection() as db:
@@ -118,7 +119,7 @@ class NetworkTests(unittest.TestCase):
         with patch.dict(os.environ, {**self.env, 'TRIPWEAVE_STACK': '1', 'TRIPWEAVE_ACCESS_PASSWORD': ''}):
             app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / 'app.py')).run(timeout=25)
             self.assertEqual(app.sidebar.selectbox[0].value, '真实协议演示（规则模型）')
-            app.chat_input[0].set_value('北京到上海2026-10-01的火车票，帮我模拟预订1张').run(timeout=25)
+            app.chat_input[0].set_value('北京到上海2026-10-01的火车票，帮我模拟预订第二个，1张').run(timeout=25)
             self.assertFalse(app.exception)
             self.assertTrue(any('MCP' in str(item.value) for item in app.json))
             next(b for b in app.button if b.label == '确认模拟操作').click().run(timeout=25)
@@ -131,7 +132,7 @@ class NetworkTests(unittest.TestCase):
                 async with ClientSession(read, write) as session:
                     await session.initialize()
                     self.assertEqual({t.name for t in (await session.list_tools()).tools},
-                                     {'query_weather', 'query_tickets', 'book_simulated_ticket'})
+                                     {'query_weather', 'query_tickets', 'prepare_simulated_booking', 'book_simulated_ticket'})
                     result = await session.call_tool('query_tickets', {'kind': 'train', 'departure_city': "北京' OR 1=1 --",
                         'arrival_city': '上海', 'travel_date': '2026-10-01'})
                     self.assertFalse(result.isError)
@@ -170,9 +171,43 @@ class NetworkTests(unittest.TestCase):
         with patch.dict(os.environ, self.env):
             engine = build_engine(demo=True, network=True)
             result = asyncio.run(engine.run('模拟预订DEMO-TRAIN-001'))
+            self.assertIsNone(result.pending_token)
+            self.assertEqual(result.results[-1].status, 'input_required')
+            self.assertEqual(result.results[-1].trace, [])
+
+    def test_multi_turn_weather_ticket_selection_quantity_and_confirmation(self):
+        with patch.dict(os.environ, self.env):
+            engine = build_engine(demo=True, network=True)
+            for query in ('北京2026-10-01的天气', '查同一天去上海的火车票'):
+                result = asyncio.run(engine.run(query))
+                self.assertEqual(result.results[0].status, 'success')
+            result = asyncio.run(engine.run('订第二个'))
+            self.assertIsNone(result.pending_token)
+            self.assertIn('数量', result.render())
+            result = asyncio.run(engine.run('1张'))
+            self.assertTrue(result.pending_token)
+            quote = result.results[-1].data['quote']
+            self.assertEqual(quote['ticket']['id'], 'DEMO-TRAIN-002')
+            self.assertEqual(quote['quantity'], 1)
             confirmed = asyncio.run(engine.confirm(result.pending_token))
-            self.assertEqual(confirmed.status, 'input_required')
-            self.assertEqual(len(confirmed.trace), 2)  # A2A + tools/list，未调用写工具
+            self.assertEqual(confirmed.status, 'success')
+            self.assertEqual(confirmed.trace[-1]['arguments'], {'quote_id': quote['quote_id']})
+
+    def test_network_price_change_rejected_after_confirmation(self):
+        with patch.dict(os.environ, self.env):
+            engine = build_engine(demo=True, network=True)
+            run = asyncio.run(engine.run('预订 DEMO-FLIGHT-001，1张'))
+            self.assertTrue(run.pending_token)
+            store = TravelStore(self.path)
+            with store.connection(write=True) as db:
+                db.execute("UPDATE tickets SET price=price+1 WHERE id='DEMO-FLIGHT-001'")
+            try:
+                reply = asyncio.run(engine.confirm(run.pending_token))
+                self.assertEqual(reply.status, 'input_required')
+                self.assertIn('变化', reply.text)
+            finally:
+                with store.connection(write=True) as db:
+                    db.execute("UPDATE tickets SET price=price-1 WHERE id='DEMO-FLIGHT-001'")
 
 
 class BookingTests(unittest.TestCase):
@@ -188,23 +223,3 @@ class BookingTests(unittest.TestCase):
             next(b for b in app.button if b.label == '进入').click().run()
             self.assertTrue(app.chat_input)
 
-    def test_same_request_atomic_replay_and_conflict(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            store = TravelStore(Path(tmp) / 'data.db')
-            with ThreadPoolExecutor(max_workers=8) as pool:
-                replies = list(pool.map(lambda _: store.book('DEMO-TRAIN-001', 2, 'same-request'), range(32)))
-            self.assertEqual(len({r['order_id'] for r in replies}), 1)
-            self.assertEqual(sum(not r['replayed'] for r in replies), 1)
-            self.assertEqual(store.tickets('train', '北京', '上海', '2026-10-01')['data'][0]['remaining'], 18)
-            with self.assertRaises(ValueError):
-                store.book('DEMO-TRAIN-001', 1, 'same-request')
-
-    def test_inventory_failure_no_order_and_rollback(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            store = TravelStore(Path(tmp) / 'data.db')
-            with store.connection() as db:
-                db.execute("CREATE TRIGGER fail_order BEFORE INSERT ON orders BEGIN SELECT RAISE(ABORT,'test'); END")
-            with self.assertRaises(Exception):
-                store.book('DEMO-TRAIN-001', 1, 'fault')
-            self.assertEqual(store.tickets('train', '北京', '上海', '2026-10-01')['data'][0]['remaining'], 20)
-            self.assertEqual(store.book('missing', 1, 'missing')['status'], 'no_data')

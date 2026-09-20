@@ -13,9 +13,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from python_a2a import AgentCard, AgentSkill, Task, TaskStatus, TaskState
 
 from .rules import domain_plan
+from .data import render_business
 from .settings import AGENTS, agent_url, mcp_url, load_llm
 
-TOOLS = {'weather': {'query_weather'}, 'tickets': {'query_tickets'}, 'order': {'book_simulated_ticket'}}
+TOOLS = {'weather': {'query_weather'}, 'tickets': {'query_tickets'}, 'order': {'prepare_simulated_booking', 'book_simulated_ticket'}}
 DESCRIPTIONS = {'weather': '按城市与日期查询天气', 'tickets': '按日期和城市查询火车、飞机、演出票样例',
                 'order': '确认后根据唯一票号与数量创建可追踪的本地模拟订单，无真实出票'}
 
@@ -36,7 +37,7 @@ class DomainAgent:
         if model is None and self.mode == 'llm':
             self.model = load_llm()
 
-    async def run(self, query, dependencies, request_id):
+    async def run(self, query, dependencies, request_id, operation="execute", arguments=None):
         async with streamablehttp_client(self.tool_url, timeout=20, sse_read_timeout=35) as (read, write, _):
             async with ClientSession(read, write) as session:
                 await session.initialize()
@@ -50,7 +51,12 @@ class DomainAgent:
                     schema.get('properties', {}).pop('request_id', None)
                     schema['required'] = [k for k in schema.get('required', []) if k != 'request_id']
                     tool_catalog.append({'name': tool.name, 'description': tool.description, 'schema': schema})
-                if self.model is None:
+                if self.kind == 'order':
+                    tool = {'prepare': 'prepare_simulated_booking', 'commit': 'book_simulated_ticket'}.get(operation)
+                    if not tool or not isinstance(arguments, dict):
+                        raise ValueError('预订只接受准备/确认两个阶段的结构化参数')
+                    raw = {'action': 'call', 'tool': tool, 'arguments': arguments}
+                elif self.model is None:
                     raw = domain_plan(self.kind, query, dependencies)
                 else:
                     raw = await self.model.ask('tool_plan',
@@ -66,7 +72,7 @@ class DomainAgent:
                 if plan.tool not in allowed or 'request_id' in plan.arguments:
                     raise ValueError('工具或参数不在允许范围')
                 arguments = dict(plan.arguments)
-                if self.kind == 'order':
+                if self.kind == 'order' and operation == 'commit':
                     arguments['request_id'] = request_id
                 schema = {**allowed[plan.tool].inputSchema, 'additionalProperties': False}
                 jsonschema.validate(arguments, schema)
@@ -81,7 +87,7 @@ class DomainAgent:
                 trace.append({'protocol': 'MCP', 'action': 'call_tool', 'tool': plan.tool,
                               'arguments': {k: v for k, v in arguments.items() if k != 'request_id'}, 'result_status': value['status']})
                 return {'status': 'success' if value['status'] == 'success' else 'input_required',
-                        'text': json.dumps(value, ensure_ascii=False), 'trace': trace}
+                        'text': render_business(self.kind, value), 'data': value, 'trace': trace}
 
 
 def create_app(kind, model=None, tool_url=None):
@@ -109,13 +115,13 @@ def create_app(kind, model=None, tool_url=None):
             if not task.id or len(task.id) > 128:
                 raise ValueError('无效任务ID')
             content = json.loads(task.message['content']['text'])
-            if set(content) != {'query', 'dependency_results'} or not isinstance(content['query'], str) or not 1 <= len(content['query']) <= 4000 or not isinstance(content['dependency_results'], list):
+            if not {'query', 'dependency_results'} <= set(content) or not set(content) <= {'query', 'dependency_results', 'operation', 'arguments'} or not isinstance(content['query'], str) or not 1 <= len(content['query']) <= 4000 or not isinstance(content['dependency_results'], list):
                 raise ValueError('任务内容无效')
-            result = await asyncio.wait_for(agent.run(content['query'], content['dependency_results'], task.id), 50)
+            result = await asyncio.wait_for(agent.run(content['query'], content['dependency_results'], task.id, content.get('operation', 'execute'), content.get('arguments')), 50)
             state = TaskState.COMPLETED if result['status'] == 'success' else TaskState.INPUT_REQUIRED
             task.status = TaskStatus(state=state, message={'role': 'agent', 'content': {'text': result['text']}})
             task.artifacts = [{'parts': [{'type': 'text', 'text': result['text']}], 'metadata': {'trace': result['trace']}}]
-            task.metadata = {'trace': result['trace']}
+            task.metadata = {'trace': result['trace'], 'business': result.get('data', {})}
             return {'jsonrpc': '2.0', 'id': body.get('id'), 'result': task.to_dict()}
         except Exception:
             # 出错不伪造成功、不打印密钥或连接异常详情。

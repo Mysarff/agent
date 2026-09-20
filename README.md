@@ -1,148 +1,152 @@
-# 行知 TripWeave · 多 Agent 旅行助手
+# 行知 TripWeave · 多轮对话与多 Agent 旅行助手
 
-天气、票务与预订分别由领域 Agent 处理。协调器选择能力并安排任务，领域 Agent 通过真实 MCP 客户端发现和调用工具；预订在用户确认后创建本地模拟订单。
+围绕“查天气 → 查票 → 选择候选 → 补充数量 → 核对确认单 → 模拟预订”构建可观察的多 Agent 应用。协调器维护会话状态和任务计划，3 个领域 Agent 通过真实 A2A / MCP 协议处理业务。
 
-本仓库当前维护项目为 **TripWeave 旅行助手**。从 `TripWeave/services/stack.py` 启动，不需要课程原版代码、MySQL 或私人配置文件。
+票务为自建虚构样例，不提供真实余票、支付或出票。默认规则模型无需 API Key；真实 LLM 需要自己的配置。本版已移除文档 RAG、项目说明问答和引用展示，景点建议仍是一般 LLM 生成，不是检索或联网搜索。
 
-**真实网络协议、明确的数据来源。** 票务为自建演示数据，不提供实时余票、真实出票或支付。默认采用规则模型，LLM 模式需要配置自己的模型服务。
+## 快速运行
 
-## 三分钟运行
-
-需要 Python 3.12。在仓库根目录运行：
+需要 Python 3.12。在仓库根目录执行：
 
 ```powershell
+git clone https://github.com/Mysarff/agent.git
+cd agent
 python -m venv .venv
 .venv/Scripts/python -m pip install -r requirements.txt
 .venv/Scripts/python -m TripWeave.services.stack
 ```
 
-Linux/macOS 使用 `.venv/bin/python` 执行上述安装与启动命令。
+Linux/macOS 将 `.venv/Scripts/python` 换成 `.venv/bin/python`。浏览器打开 `http://127.0.0.1:8501`。启动器启动页面、3 个 A2A Agent、1 个 MCP 服务。结束时按 Ctrl+C。端口冲突会明确报错，不会杀掉其他程序。
 
-浏览器打开 `http://127.0.0.1:8501`。一条命令启动页面、3 个 A2A Agent 和 1 个 MCP 服务，Ctrl+C 关闭本次启动的服务。
+默认“真实协议演示（规则模型）”下，请逐句输入：
 
-默认选择“真实协议演示（规则模型）”，输入：
+1. `北京2026-10-01的天气`
+2. `查同一天去上海的火车票`
+3. `订第二个`
+4. 在系统追问数量后输入 `1张`
+5. 核对显示的车次、票号、席别、日期、数量和金额，再点击“确认模拟操作”。
 
-> 查询北京2026-10-01的天气，以及北京到上海2026-10-01的火车票，帮我模拟预订1张
+第二步应显示 DEMO-TRAIN-001 / DEMO-TRAIN-002 两条虚构车票；第三步不能直接下单，第四步才生成确认单。此示例日期对应固定样例数据，不是实时信息。
 
-天气与票务分别执行，票务结果传给预订任务；点击确认后保存模拟订单。展开“查看任务与执行记录”，可见 AgentCard 发现结果、所选路由、依赖、A2A 任务和 MCP 工具调用。
+也支持一句组合需求：`查询北京2026-10-01的天气和北京到上海2026-10-01的火车票，预订第二个，1张`。天气与查票可并发，预订准备依赖查票结果。
 
-## 主调用链
+## 角色与调用流程
 
 ```mermaid
 flowchart TD
-  U[用户] --> C[协调器：能力发现 / 候选检索 / 计划校验]
-  C -->|A2A| W[WeatherAgent]
-  C -->|A2A| T[TicketAgent]
-  C --> K[RAG 知识问答]
-  T -->|上游结果回传协调器| O[用户确认后 A2A 调用 OrderAgent]
-  W -->|MCP initialize / list_tools / call_tool| M[真实 MCP 服务]
-  T -->|MCP| M
-  O -->|MCP| M
-  M --> S[样例数据库 / 模拟订单事务]
-  M --> F[可选 Open-Meteo 天气预报]
+  U[用户输入] --> S[会话状态：补齐条件 / 保存候选与选择]
+  S --> P[协调器：检查可用能力 / 生成并校验计划]
+  P -->|A2A| W[WeatherAgent]
+  P -->|A2A| T[TicketAgent]
+  W -->|MCP| WT[天气工具：样例或可选预报提供者]
+  T -->|MCP| TT[查票工具：SQLite 样例库]
+  TT --> C[带序号候选结果写回本会话]
+  C --> Q[明确选择和数量；不足先追问]
+  Q -->|A2A OrderAgent + MCP| D[核对库存价格并生成5分钟确认单]
+  D --> H[用户核对并确认]
+  H -->|A2A OrderAgent + MCP| B[按确认单ID提交]
+  B --> X[事务复查库存、价格和行程 → 扣库存 + 模拟订单]
+  P --> G[可选一般景点建议：LLM直接生成]
 ```
 
-## 配置真实 LLM
+当前是 **3 个独立领域 Agent、4 类能力、4 个 MCP 工具**。能力为天气、查票、模拟预订、景点建议；MCP 工具为 `query_weather`、`query_tickets`、`prepare_simulated_booking`、`book_simulated_ticket`。协调器在应用进程中运行，调用 A2A client 分配任务；不额外部署为第四个 A2A Agent。
 
-启动器会读取仓库根目录的 `.env`，已有环境变量优先；不读取原课程 `config.py`。把 `.env.example` 复制为 `.env` 后填写配置，不要提交密钥。
+## 四项改进如何实现
 
-| 变量 | 用途 |
-| --- | --- |
-| `TRIPWEAVE_API_KEY` | 自己的模型密钥，不提交 GitHub |
-| `TRIPWEAVE_MODEL` | 服务商支持的模型名称 |
-| `TRIPWEAVE_BASE_URL` | 可选的兼容模型接口地址 |
-| `TRIPWEAVE_WEATHER_PROVIDER` | `sample`（默认）或 `open_meteo` |
-| `TRIPWEAVE_DB` | 可选 SQLite 路径，默认 `TripWeave/var/travel.sqlite3` |
-| `TRIPWEAVE_ACCESS_PASSWORD` | 私有演示访问口令；非本机监听要求至少 12 字符 |
+### 1. 跨轮日期和城市
 
-填写配置后先停止旧服务，再运行 `python -m TripWeave.services.stack --live`，页面选择“LLM 多 Agent 协作”。协调器用 LLM 拆解需求，领域 Agent 用 LLM 根据 MCP 工具 Schema 提取参数。未配置或未重启到 LLM 模式时，页面显示启用说明，并明确使用示例模式继续体验，不会出现只剩错误框的页面。规则模式不能当作 LLM 效果数据。
+- 每个 `Engine` 实例持有独立 `SessionState`，Streamlit 每个会话独立创建，CLI 每次运行独立创建。
+- `Turn` 描述当前输入明确提供的意图、日期、城市、票种、票号、序号和数量。规则模式使用有限解析器；LLM 模式用结构化输出提取，再由 Pydantic 和程序校验。
+- Python 合并新字段，未重述的字段保留。查票的出发地优先使用已保存出发地；没有出发地时可继承此前天气城市。因此“北京的天气”之后“同一天去上海”可补齐条件。
+- ISO 日期、月日、今天/明天/后天由程序解释；相对日期按 Asia/Shanghai。缺字段先追问，后续仅回复日期或城市等信息可继续同一查询。
+- 模型不能猜票号、序号或数量：这些字段必须在当前输入中有可解析依据。程序补全后的查询才交给领域 Agent。
+- 聊天历史仍以最近8条消息辅助规划，但日期、候选和所选票号不依赖从长聊天文本反复猜测。
 
-服务地址可用 `TRIPWEAVE_WEATHER_URL`、`TRIPWEAVE_TICKETS_URL`、`TRIPWEAVE_ORDER_URL`、`TRIPWEAVE_MCP_URL` 配置。默认启动器使用本机固定端口；分机部署需自行分别启动服务并配置可信地址和网络访问控制。
+### 2. 保存候选和选择
 
-### 命令行入口
+- Agent 在 A2A Task 元数据中返回结构化业务数据；页面显示编号列表，协调器校验票字段后保存同一顺序。SQL 使用 `ORDER BY price,id` 保持稳定。
+- “第二个”绑定最近一次列表中的第二条，不能从模型输出虚构票号。“刚才那张”在候选有多条且未选定时会追问，不擅自选择第一条。
+- 新查票会清空旧列表；查询失败、无结果或切换日期/行程条件后不继续使用旧候选。候选超过10分钟也必须重新查询。
+- 输入明确票号时允许直接进入预检，但工具仍须检查票是否存在、库存是否足够。
 
-只体验离线固定文本：`python -m TripWeave.main --demo`。
+### 3. 缺参数先追问，再确认
 
-使用真实协议的规则演示，先在一个终端运行 `python -m TripWeave.services.stack --no-ui`，再在另一个终端运行：
+- 保存待补的请求类型。`订第二个` 记录选票，但数量为空时仅追问；回复 `1张` 接续该预订。
+- 数量范围1至5，序号范围1至20且不得超过实际列表。“第二张”是序号，不是购买2张。
+- 参数齐全后，订单 Agent 调用 `prepare_simulated_booking`。数据库生成包含票号、行程、单价、数量、总价、到期时间的报价记录。只有报价校验通过才给确认按钮。
+- 每条新消息都会撤销旧的会话确认令牌；修改数量要重新预检、重新展示确认单。切换到天气等新话题会结束未完成订票。取消或清空会话不能继续确认旧操作。
+- 点击确认时不再调用模型重新选票或改数量，只提交用户刚才看到的确认单 ID。
 
-```bash
-python -m TripWeave.main --network --question "北京2026-10-01的天气"
+### 4. 提交时复查库存与价格
+
+- 准备确认单时只检查，不锁库存、不创建订单。报价在 SQLite `booking_quotes` 表中保存5分钟。
+- 提交时执行 `BEGIN IMMEDIATE`，在同一事务中重新读取报价和当前票务。不存在、过期、库存不足、价格/车次/席别/日期/城市变化都会拒绝，并要求重新查询确认。
+- 检查成功才扣减库存、写入模拟订单并标记确认单已使用；任一写入失败整体回滚。
+- 同一报价单即使用不同请求 ID 重复提交也返回已有订单，不重复扣库存；同一请求 ID 用于不同报价单会拒绝。新的报价单视作新的业务意图，并不跨不同报价自动去重。
+- 确认单不是座位保留，查询时有票不保证确认时还有票。超时未收到响应也不等于一定没有创建订单；当前没有订单查询页面，需核对模拟数据库。
+
+## 相比课程原版
+
+原版已有 LLM 意图识别、3 个领域 Agent、A2A 与真实 MCP；本项目不把这些都声称为从零新增。
+
+| 环节 | 原版 | 当前改进 |
+| --- | --- | --- |
+| 路由 | LLM 意图 + 固定分支 | 可信 AgentCard 可用性检查、BM25 能力候选、结构化计划及依赖校验 |
+| 多轮 | 主要传递聊天文本 | 每会话保存出行槽位、候选列表、选票及待补参数 |
+| 任务执行 | 逐个按意图调用 | 独立读取最多2路并发，依赖传递、超时和失败阻断 |
+| 工具 | 天气/查票接收模型生成SQL | MCP 工具 Schema、允许列表、参数化查询；确认提交不再让模型改参数 |
+| 预订 | 返回预订成功文字 | 缺参数追问、报价确认、提交复查、事务扣库存、模拟订单持久化 |
+| 文档问答 | 没有当前文档链路 | 已移除上一版的小型文档 RAG；不再作为项目功能或简历卖点 |
+| 运行 | 课程配置及独立启动 | 环境变量配置、一键启动、网页/CLI、自动化测试和GitHub CI |
+
+BM25 当前仅检索能力描述和示例，帮助路由选择；这不等于文档 RAG。
+
+## 配置模型及运行模式
+
+将 `.env.example` 复制为 `.env`，填写自己的配置，不提交密钥：
+
+```dotenv
+TRIPWEAVE_MODEL_MODE=llm
+TRIPWEAVE_API_KEY=自己的密钥
+TRIPWEAVE_MODEL=服务商支持的模型名
+TRIPWEAVE_BASE_URL=对应兼容接口地址
 ```
 
-使用真实 LLM，填写根目录 `.env` 后，先运行 `python -m TripWeave.services.stack --live --no-ui`，再运行 `python -m TripWeave.main --live`。CLI 和网页使用同一套 TripWeave A2A/MCP 服务；CLI 也会读取根目录 `.env`。切换服务模式前先停止旧服务。
+先停止旧服务，再执行 `python -m TripWeave.services.stack --live`。启动器和 CLI 都读取根目录 `.env`，已设置环境变量优先。调用自己的模型服务可能产生费用。
 
-## 相比课程原版，具体改了什么
+| 模式 | 模型 | 协议与数据 |
+| --- | --- | --- |
+| 离线演示 | 有限规则 | 不经网络协议；每会话临时SQLite样例库，关闭后不保留离线订单 |
+| 真实协议演示 | 有限规则 | 真实本机A2A/MCP，持久化到 `TripWeave/var/travel.sqlite3` |
+| LLM多Agent协作 | 用户配置的LLM | 同一套A2A/MCP与样例业务；外部模型效果尚未实测 |
 
-项目展示名称为「行知 TripWeave」，Python 包名为 `TripWeave`，模型配置前缀为 `TRIPWEAVE_`。仓库地址仍是 `Mysarff/agent`。从上一版升级时，将 `.env` 中的 `SMARTVOYAGE_` 变量名改为 `TRIPWEAVE_`（值不变），停止旧服务后使用新启动命令；不要直接覆盖已填写的 `.env`。已有默认本地演示库需从 `SmartVoyage/var` 移到 `TripWeave/var`，或通过 `TRIPWEAVE_DB` 指定原库绝对路径；不操作原课程 MySQL 数据。
+规则语法支持北京/上海/广州/深圳、ISO日期/月日/今天明天后天、中文一至十或数字序号、1至5张等明确表达；并非任意自然语言。复杂省略表达或多段行程不能保证处理，本会话只维护一组当前出行条件。即使使用LLM，写操作也须通过程序约束。
 
-**原版已经有 LLM 意图识别、3 个领域 Agent、A2A 通信和真实 MCP 调用。** 本次工作是对这些能力进行重构、补齐工程行为；仅更换名称不构成技术创新。
+天气默认固定样例，设置 `TRIPWEAVE_WEATHER_PROVIDER=open_meteo` 可使用已实现的外部预报适配，但外网效果未验证。`TRIPWEAVE_DB` 可指定数据库。`TRIPWEAVE_WEATHER_URL`、`TRIPWEAVE_TICKETS_URL`、`TRIPWEAVE_ORDER_URL`、`TRIPWEAVE_MCP_URL` 可指定可信服务地址。
 
-| 环节 | 课程原版 | TripWeave 改进版 | 重点阅读 |
-| --- | --- | --- | --- |
-| 意图与路由 | LLM 输出意图后，通过 `if/elif` 映射固定 Agent | 从配置中的可信 AgentCard 获取可用能力，BM25 推荐候选；LLM 模式输出结构化任务计划，校验能力 ID 和依赖，错误计划最多重试一次 | [registry.py](TripWeave/intelligence/registry.py)、[router.py](TripWeave/intelligence/router.py)、[schemas.py](TripWeave/intelligence/schemas.py) |
-| 多任务协作 | 按意图循环逐个调用，主要依赖对话文本传递信息 | 显式 `depends_on` 依赖，独立查询最多 2 路并发，上游结果结构化传递给下游；超时或上游失败时阻止相关后续步骤 | [engine.py](TripWeave/intelligence/engine.py)、[transport.py](TripWeave/intelligence/transport.py) |
-| MCP 工具使用 | 已有 MCP；天气和票务接收模型生成的 SQL | 领域 Agent 通过 `initialize → list_tools → call_tool` 发现和调用工具；LLM 模式按 Schema 选工具、提取参数，执行前检查允许的工具和参数类型 | [domain_agent.py](TripWeave/services/domain_agent.py)、[mcp_tools.py](TripWeave/services/mcp_tools.py) |
-| 预订 | 原预订工具直接返回“预订成功”文字 | 用户确认后执行模拟预订；SQLite 事务完成库存检查、扣减与订单写入，同一任务 ID 重放不重复扣库存 | [engine.py](TripWeave/intelligence/engine.py)、[data.py](TripWeave/services/data.py) |
-| RAG | 主要围绕查询和生成回复 | 新增自编资料分块、BM25 检索、来源及引用片段校验，可与天气等能力组合路由；这是小型文本 RAG，未使用向量库或重排模型 | [retrieval.py](TripWeave/intelligence/retrieval.py)、[knowledge.py](TripWeave/intelligence/knowledge.py) |
-| 调试与运行 | 分别启动服务，主要看日志 | 一条命令启动全部服务；页面展示路由、依赖、步骤状态、耗时及 A2A/MCP 调用记录；增加自动测试与 GitHub CI | [stack.py](TripWeave/services/stack.py)、[ui.py](TripWeave/intelligence/ui.py)、[tests](TripWeave/tests) |
+命令行：`python -m TripWeave.main --demo` 离线体验。真实协议先在一个终端启动 `python -m TripWeave.services.stack --no-ui`，另一个终端运行 `python -m TripWeave.main --network`；真实模型则分别使用 `stack --live --no-ui` 与 `main --live`。`/confirm` 确认，`/cancel` 取消，`/quit` 退出。
 
-以“查北京天气、北京到上海车票，并模拟预订 1 张”为例：
+## 验证与学习顺序
 
-```text
-用户问题 → 发现可用能力 → 生成并校验计划
-                         ├─ WeatherAgent → MCP 查天气 ─────────┐
-                         └─ TicketAgent  → MCP 查车票          │
-                                              ↓              │
-                                         等待用户确认         │
-                                              ↓              │
-                           OrderAgent → MCP → 模拟订单与库存   │
-                                              └──────────────┴→ 展示结果与调用记录
-```
+执行 `python -m TripWeave.verify`，报告写入 `reports/intelligence_verification.json`。测试涵盖跨轮补参、选票、歧义、候选过期、报价确认、价格库存变化、并发重放、回滚、会话隔离、真实本机协议和页面交互。报告不是外部LLM效果或生产性能评测。远端结果见 [GitHub Actions](https://github.com/Mysarff/agent/actions)。
 
-配置真实 LLM 后由模型生成计划；默认规则模式用于验证协议和执行链路，不能证明模型意图识别准确率。RAG 是协调器调用的本地知识模块，不是额外部署的 A2A Agent；当前是协调器管理 3 个领域 Agent，不是任意 Agent 自由互相对话。
+建议依次阅读：
 
-学习时按 `router.py → registry.py → engine.py → transport.py → domain_agent.py → mcp_tools.py → data.py` 阅读，再学习 `retrieval.py / knowledge.py`。本地工作区的 `SmartVoyage/legacy/main_original.py`、`SmartVoyage/a2a_server/`、`SmartVoyage/mcp_server/` 保留课程原版供对照，不包含在 GitHub 发布包里。
+1. [session.py](TripWeave/intelligence/session.py)：当前输入如何转成槽位，候选和追问如何保存。
+2. [router.py](TripWeave/intelligence/router.py)、[registry.py](TripWeave/intelligence/registry.py)：能力发现、候选检索和计划校验。
+3. [engine.py](TripWeave/intelligence/engine.py)：任务执行、预检、确认令牌与提交。
+4. [transport.py](TripWeave/intelligence/transport.py)、[domain_agent.py](TripWeave/services/domain_agent.py)：A2A业务数据、MCP发现和工具调用。
+5. [mcp_tools.py](TripWeave/services/mcp_tools.py)、[data.py](TripWeave/services/data.py)：4个业务工具、报价与订单事务。
+6. [test_session_booking.py](TripWeave/tests/test_session_booking.py)、[test_network.py](TripWeave/tests/test_network.py)：可复现用例及行为边界。
 
-可量化的实现范围是 **3 个领域 Agent、3 个 MCP 工具、单计划最多 6 个步骤、最多 2 路并发查询、确认令牌 5 分钟有效期**。测试结果是工程验证结果，不能写成线上用户规模、准确率或性能提升百分比。尚未完成外部 LLM 质量评测和生产负载评测。
+## 升级与部署边界
 
-## 运行验证
+更新代码后需停止旧栈再重启：订单 MCP 参数与 A2A 业务消息已经更新，不能混用新旧进程。首次运行自动添加报价表及第二条火车票样例，已有订单和库存不删除、不重置；没有修改课程 MySQL。升级前已有订单的展示内容保持原样。
 
-```bash
-python -m TripWeave.verify
-```
+会话槽位、选票与按钮令牌保存在应用内存，清空会话或重启后不恢复；网络模式的订单与报价保存在 SQLite。各会话的选择隔离，同一实例的样例库存共享。未实现账户权限、支付、真实出票或长期记忆。
 
-测试覆盖本地真实 A2A → Streamable HTTP MCP → SQLite 的多步骤协作、引用校验、服务下线、非法工具调用、人工确认、库存事务与重复请求重放。外部 LLM 质量、在线真实票务和生产负载不在本地测试结论内。
+私有演示服务器：在 `.env` 设置至少12字符 `TRIPWEAVE_ACCESS_PASSWORD`，执行 `docker compose up -d --build`，默认仅映射宿主 `127.0.0.1:8501`。可通过SSH隧道访问；域名访问需另配HTTPS/WebSocket反向代理。不要公开A2A/MCP内部端口：程序端确认是应用流程控制，不是业务服务完整的身份授权系统。
 
-生成的结果保存在 `reports/`，不提交仓库。GitHub 自动测试的报告可在 [Actions](https://github.com/Mysarff/agent/actions) 对应运行的 Artifacts 下载。
+Docker引擎构建尚未验证，未部署公网服务。A2A 使用 `python-a2a==0.5.4` 的 `tasks/send` 形式，不宣称兼容所有协议版本；MCP 使用 `mcp==1.18.0` Streamable HTTP。
 
-## 文件与学习顺序
-
-| 位置 | 用途 |
-| --- | --- |
-| `TripWeave/intelligence/registry.py`、`router.py` | Agent 能力发现、路由、计划校验 |
-| `TripWeave/intelligence/engine.py`、`transport.py` | 并发与依赖调度、确认、A2A 调用 |
-| `TripWeave/services/domain_agent.py`、`mcp_tools.py` | 领域 Agent 选择和调用 MCP 工具 |
-| `TripWeave/services/data.py` | 参数化查询、模拟订单事务及去重 |
-| `TripWeave/knowledge/` | RAG 的资料来源 |
-| `TripWeave/tests/`、`.github/workflows/` | 本地测试与 GitHub 自动检查 |
-
-本次在原旅行场景上增加能力发现、结构化规划、真实 A2A/MCP 调用记录，将固定预订成功文本改为可查询的模拟订单。预订去重只针对同一请求 ID；待确认任务仍保存在当前会话，未实现跨进程恢复。
-
-## 服务器部署（私有演示）
-
-1. 克隆仓库，把 `.env.example` 复制为 `.env`。
-2. 设置自己的随机 `TRIPWEAVE_ACCESS_PASSWORD`，至少 12 字符。
-3. 执行 `docker compose up -d --build`。默认使用规则模型，数据卷保存模拟订单。
-4. 在自己的电脑使用 `ssh -L 8501:127.0.0.1:8501 用户名@服务器地址` 建立隧道，访问 `http://127.0.0.1:8501`。
-
-需要域名访问时，增加支持 WebSocket 的 HTTPS 反向代理，指向服务器 `127.0.0.1:8501`。不要开放内部 A2A/MCP 端口。访问口令是演示门禁，不是完整账户与限流系统。LLM 模式在 `.env` 设置 `TRIPWEAVE_MODEL_MODE=llm` 及模型变量后重建容器。
-
-Docker 构建尚未在可用引擎中验证；本项目未部署公网应用。GitHub 保存代码，GitHub Pages 不能直接运行此 Python 服务。查看 [GitHub Pages 说明](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages)。
-
-## 来源与范围
-
-基于 SmartVoyage 课程项目的旅行场景和学习过程二次开发。当前发布包包含新增编排层、协议服务与测试，不上传旧课程凭证、SQL 初始化脚本或整个课程目录。原项目在本地保留，未删除或迁移原 MySQL 数据；本版便携演示库与其隔离。
-
-A2A 适配使用 `python-a2a==0.5.4` 的 `tasks/send` 消息形式，不宣称兼容所有版本的 A2A 客户端。MCP 使用 `mcp==1.18.0` Streamable HTTP。能力发现仅访问配置中的可信地址，不扫描互联网或任意注册服务。
-
-这是学习与私有演示项目：尚无独立用户账户、支付、真实出票或生产级配额管理。多访客共享同一实例的样例库存；不要存入个人出行信息。公开运营前还需身份认证、限流及独立部署验证。
+基于 SmartVoyage 课程旅行场景二次开发。本地课程代码保留作对照，不包含在本仓库发布包中。GitHub不包含私人配置、数据库、日志或虚拟环境。

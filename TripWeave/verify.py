@@ -26,7 +26,7 @@ def main():
     suite = unittest.defaultTestLoader.discover(str(ROOT / 'TripWeave/tests'), top_level_dir=str(ROOT))
     result = unittest.TextTestRunner(verbosity=2, resultclass=RecordedResult).run(suite)
     hashes = {}
-    for directory in ('TripWeave/intelligence', 'TripWeave/knowledge', 'TripWeave/tests', 'TripWeave/services'):
+    for directory in ('TripWeave/intelligence', 'TripWeave/tests', 'TripWeave/services'):
         for path in sorted((ROOT / directory).rglob('*')):
             if path.suffix in ('.py', '.json'):
                 hashes[path.relative_to(ROOT).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()

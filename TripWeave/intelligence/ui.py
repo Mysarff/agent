@@ -9,7 +9,7 @@ from TripWeave.intelligence.runtime import build_engine
 
 
 def clear_current():
-    st.session_state.engine.pending.clear()
+    st.session_state.engine.reset()
     st.session_state.messages = []
     st.session_state.last_run = None
 
@@ -47,7 +47,7 @@ if access_password and not st.session_state.get('access_granted'):
                 st.error('口令不正确')
     st.stop()
 st.title("🧭 行知 TripWeave · 多 Agent 旅行助手")
-st.caption("查询天气与票务、阅读项目资料，并查看每一步的来源和执行结果。")
+st.caption("连续查询天气和车票，选择候选、补齐数量，确认后创建模拟订单。")
 choices = ["离线演示", "真实协议演示（规则模型）", "LLM 多 Agent 协作"]
 default_mode = 2 if os.getenv('TRIPWEAVE_MODEL_MODE') == 'llm' else 1 if os.getenv('TRIPWEAVE_STACK') == '1' else 0
 requested_mode = st.sidebar.selectbox("运行方式", choices, index=default_mode, key='requested_mode')
@@ -76,22 +76,22 @@ if st.session_state.get("engine_mode") != mode:
 
 engine = st.session_state.engine
 if mode == "离线演示":
-    st.info("当前使用固定路由与虚构查询样例，不连接付费模型或真实票务；可复制以下示例体验。")
+    st.info("离线规则演示：使用会话临时样例库，不调用 A2A/MCP 网络或付费模型。关闭会话后离线订单不保留。可逐句输入以下示例。")
     for example in EXAMPLES:
         st.code(example, language=None)
 elif mode in (choices[1], choices[2]):
     st.info('当前主链路经过独立领域 Agent 和真实 MCP 服务。票务为演示库，订单只在本地模拟；规则模式不代表 LLM 理解效果。')
-    st.code('查询北京2026-10-01的天气，以及北京到上海2026-10-01的火车票，帮我模拟预订1张', language=None)
+    st.code('北京2026-10-01的天气 → 查同一天去上海的火车票 → 订第二个 → 1张', language=None)
 
 example_query = None
 if not st.session_state.messages:
     st.subheader('从一个问题开始')
     st.write('点击下面的示例，或在底部输入问题。涉及模拟预订时，会先展示待确认任务。')
     samples = [
-        ('了解数据来源', '看看哪些是真实调用、哪些是样例数据。', EXAMPLES[0]),
-        ('体验天气查询', '查询指定城市和日期的天气样例。', EXAMPLES[1] if mode == choices[0] else '北京2026-10-01的天气'),
-        ('体验多 Agent 协作', '并行查天气和车票，确认后创建模拟订单。', EXAMPLES[2] if mode == choices[0] else
-         '查询北京2026-10-01的天气，以及北京到上海2026-10-01的火车票，帮我模拟预订1张')]
+        ('开始多轮对话', '先查天气，再逐句查票和选择。', EXAMPLES[0]),
+        ('查看候选车票', '查看带序号的两条演示车票。', '查询北京到上海2026-10-01的火车票'),
+        ('体验多 Agent 协作', '并行查天气和票，选择第二个并生成确认单。',
+         '查询北京2026-10-01的天气和北京到上海2026-10-01的火车票，预订第二个，1张')]
     for column, (label, description, question) in zip(st.columns(3), samples):
         with column:
             st.write(description)
@@ -126,11 +126,8 @@ if run:
                  "plan": run.plan.model_dump() if run.plan else None,
                  "steps": [{"step": r.step_id, "capability": r.capability, "status": r.status,
                             "elapsed_ms": r.elapsed_ms, "error_code": r.error_code, "protocol_trace": r.trace} for r in run.results]})
-    for item in run.results:
-        for source in item.sources:
-            with st.expander(f"依据：{source['title']} · {source['id']}"):
-                st.caption(f"来源：{source['source']} | 版本：{source['version']} | 类型：{source['kind']}")
-                st.write(source["text"])
+    with st.expander('本轮使用的出行条件'):
+        st.json(engine.session.snapshot())
 
 with st.sidebar.expander("可用能力（注册配置，不代表服务在线）"):
     for capability in engine.registry.items.values():
